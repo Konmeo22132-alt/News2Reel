@@ -1,41 +1,66 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# ─── Dependencies ─────────────────────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+# ─── Next.js ──────────────────────────────────────────────────────────────────
+.next/
+out/
+build/
+dist/
 
-# testing
-/coverage
+# ─── Environment variables (NEVER commit) ─────────────────────────────────────
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
 
-# next.js
-/.next/
-/out/
+# ─── Database ─────────────────────────────────────────────────────────────────
+prisma/dev.db
+prisma/dev.db-journal
+*.db
+*.sqlite
+*.sqlite3
 
-# production
-/build
+# ─── Generated video files ────────────────────────────────────────────────────
+public/videos/*.mp4
+public/videos/*.webm
+public/videos/*.avi
 
-# misc
+# ─── Prisma generated (we use MongoDB now, but keep local generated out) ──────
+lib/generated/
+
+# ─── OS & Editor ──────────────────────────────────────────────────────────────
 .DS_Store
-*.pem
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/settings.json
+.vscode/launch.json
 
-# debug
+# ─── Logs ─────────────────────────────────────────────────────────────────────
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
-
-# vercel
-.vercel
-
-# typescript
+# ─── TypeScript ───────────────────────────────────────────────────────────────
 *.tsbuildinfo
 next-env.d.ts
+
+# ─── Testing ──────────────────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ─── Misc ────────────────────────────────────────────────────────────────────
+.vercel
+.turbo
+.gitignore
+AGENTS.md
+CLAUDE.md

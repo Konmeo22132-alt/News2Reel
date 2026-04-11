@@ -1,0 +1,34 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model AppConfig {
+  id               Int      @id @default(1)
+  deepseekApiKey   String?
+  videoQuality     String   @default("720p")
+  dailyVideoLimit  Int      @default(10)
+  newsSources      String   @default("[]")
+  channelGoal      String   @default("ads")
+  tiktokApiKey     String?
+  tiktokApiSecret  String?
+  autoPostEnabled  Boolean  @default(false)
+  customPrompt     String?
+  updatedAt        DateTime @updatedAt
+}
+
+model VideoJob {
+  id          String    @id @default(uuid())
+  sourceUrl   String
+  status      String    @default("pending")
+  resultUrl   String?
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+}
