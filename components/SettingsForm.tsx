@@ -167,13 +167,13 @@ export default function SettingsForm({ config }: { config: AppConfig }) {
       {tab === "ai" && (
         <div className="card p-5 space-y-5 fade-up">
           <div>
-            <label style={labelStyle}>DeepSeek API Key</label>
+            <label style={labelStyle}>Beeknoee API Key</label>
             <div className="relative">
               <input
                 type={showDk ? "text" : "password"}
                 value={deepseekApiKey}
                 onChange={(e) => setDeepseekApiKey(e.target.value)}
-                placeholder="sk-..."
+                placeholder="sk-bee-..."
                 className="input pr-10 font-mono text-sm"
               />
               <button
@@ -187,7 +187,7 @@ export default function SettingsForm({ config }: { config: AppConfig }) {
             </div>
             {deepseekApiKey && (
               <p className="text-xs mt-1.5" style={{ color: "#10b981" }}>
-                ● API Key đã được cấu hình
+                ● Beeknoee API Key đã được cấu hình
               </p>
             )}
           </div>

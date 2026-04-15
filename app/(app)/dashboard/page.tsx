@@ -71,7 +71,7 @@ export default async function DashboardPage() {
         >
           <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-            <strong className="text-red-400">Chưa cấu hình DeepSeek API Key.</strong>{" "}
+            <strong className="text-red-400">Chưa cấu hình Beeknoee API Key.</strong>{" "}
             Pipeline sẽ thất bại khi tạo video.{" "}
             <a href="/settings" style={{ color: "#818cf8" }}>
               → Vào Settings
@@ -106,7 +106,7 @@ export default async function DashboardPage() {
           <p className={`text-2xl font-bold ${apiOk ? "text-emerald-400" : "text-red-400"}`}>
             {apiOk ? "Online" : "Offline"}
           </p>
-          <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>DeepSeek API</p>
+          <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Beeknoee AI API</p>
         </div>
 
         <div className="card p-5">

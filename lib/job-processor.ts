@@ -39,7 +39,7 @@ export async function processVideoJob(
 ): Promise<void> {
   try {
     if (!config.deepseekApiKey) {
-      throw new Error("Chưa cấu hình DeepSeek API Key trong Settings");
+      throw new Error("Chưa cấu hình Beeknoee API Key trong Settings");
     }
 
     await setStatus(jobId, "processing");
@@ -50,9 +50,9 @@ export async function processVideoJob(
     log(`[${jobId.slice(0, 8)}] Bài: "${article.title}"`);
 
     // ── STEP 2: AI Script ────────────────────────────────────────
-    log(`[${jobId.slice(0, 8)}] DeepSeek AI tạo kịch bản...`);
+    log(`[${jobId.slice(0, 8)}] Beeknoee AI (gpt-oss-120b) tạo kịch bản...`);
     const script = await generateScript(article, {
-      deepseekApiKey: config.deepseekApiKey,
+      apiKey: config.deepseekApiKey,   // field vẫn giữ tên cũ trong DB, value là Beeknoee key
       channelGoal: config.channelGoal,
       customPrompt: config.customPrompt,
     });

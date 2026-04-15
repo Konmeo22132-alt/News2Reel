@@ -97,9 +97,24 @@ export async function textToSpeech(text: string, outputPath: string): Promise<vo
 /**
  * Get audio duration in seconds by reading MP3 header.
  * Uses ffprobe for accurate measurement.
+ * Tries to locate ffprobe next to the ffmpeg-static binary first,
+ * then falls back to system PATH (e.g. apt-installed ffmpeg on Linux).
  */
 export async function getAudioDuration(mp3Path: string): Promise<number> {
   const { default: ffmpeg } = await import("fluent-ffmpeg");
+  const { default: ffmpegBinPath } = await import("ffmpeg-static");
+
+  if (ffmpegBinPath) {
+    // Derive ffprobe path — same directory as ffmpeg binary, swap the name
+    const ffprobePath = ffmpegBinPath.replace(
+      /[/\\]ffmpeg(\.exe)?$/i,
+      (_, ext: string | undefined) => `${path.sep}ffprobe${ext ?? ""}`
+    );
+    if (fs.existsSync(ffprobePath)) {
+      ffmpeg.setFfprobePath(ffprobePath);
+    }
+    // If not found alongside ffmpeg, fluent-ffmpeg falls back to system PATH
+  }
 
   return new Promise((resolve, reject) => {
     ffmpeg.ffprobe(mp3Path, (err, metadata) => {

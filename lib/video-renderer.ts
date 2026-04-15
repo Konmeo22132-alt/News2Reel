@@ -230,6 +230,6 @@ export async function renderVideo(
     for (const p of [...segmentPaths, ...mp3Paths]) {
       try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch { /* ignore */ }
     }
-    try { fs.rmdirSync(tempDir, { recursive: true }); } catch { /* ignore */ }
+    try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch { /* ignore */ }
   }
 }

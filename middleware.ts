@@ -7,6 +7,7 @@ export function middleware(request: NextRequest) {
   if (
     pathname.startsWith("/login") ||
     pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/jobs/process") || // Internal server-to-server call — no cookie
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico"
   ) {

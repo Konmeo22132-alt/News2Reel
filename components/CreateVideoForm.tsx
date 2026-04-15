@@ -192,7 +192,7 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
                   {statusText}
                 </p>
                 <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                  Scrape → DeepSeek AI → FFmpeg Render → TikTok (nếu bật)
+                  Scrape → Beeknoee AI → FFmpeg Render → TikTok (nếu bật)
                 </p>
               </div>
             </div>
@@ -264,7 +264,7 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
               </div>
 
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Pipeline: Thu thập bài → DeepSeek AI tạo kịch bản → FFmpeg render video → Đăng TikTok (nếu bật)
+                Pipeline: Thu thập bài → Beeknoee AI tạo kịch bản → FFmpeg render video → Đăng TikTok (nếu bật)
               </p>
             </form>
           )}
