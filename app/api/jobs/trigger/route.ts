@@ -31,16 +31,12 @@ export async function POST(request: NextRequest) {
     const jobId = uuidv4();
     await VideoJobModel.create({ jobId, sourceUrl, status: "pending" });
 
-    // Kick off the background process by calling the process endpoint.
-    // We use a non-blocking fire-and-forget fetch to the internal API
-    // so it runs in a separate request context and won't be killed when
-    // this response completes.
-    const baseUrl = request.nextUrl.origin;
-    fetch(`${baseUrl}/api/jobs/process`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jobId, sourceUrl }),
-    }).catch((err) => console.error(`[Job ${jobId}] Failed to start process:`, err));
+    // Kick off the background process directly via Promise.
+    // Since this app runs on a persistent VPS (PM2), background promises
+    // keep running perfectly without needing a network loopback fetch.
+    Promise.resolve()
+      .then(() => processVideoJob(jobId, sourceUrl, config as AppConfig))
+      .catch((err) => console.error(`[Job ${jobId}] Background task failed:`, err));
 
     return NextResponse.json({ success: true, jobId, message: "Pipeline đã khởi động" });
   } catch (err) {
