@@ -24,11 +24,21 @@ async function setStatus(
         status,
         ...extra,
         ...(status === "completed" || status === "failed"
-          ? { completedAt: new Date() }
+          ? { completedAt: new Date(), currentStep: status === "completed" ? "Hoàn thành" : "Thất bại" }
           : {}),
       },
     }
   );
+}
+
+async function dbLog(jobId: string, msg: string, step?: string) {
+  await connectDB();
+  const updateData: any = { $push: { logs: msg } };
+  if (step) {
+    if (!updateData.$set) updateData.$set = {};
+    updateData.$set.currentStep = step;
+  }
+  await VideoJobModel.updateOne({ jobId }, updateData).catch(() => {});
 }
 
 export async function processVideoJob(
@@ -44,13 +54,18 @@ export async function processVideoJob(
 
     await setStatus(jobId, "processing");
 
+    const track = (msg: string, step?: string) => {
+      log(`[${jobId.slice(0, 8)}] ${msg}`);
+      return dbLog(jobId, msg, step); // fire and forget can be risky if node dies, so we return promise
+    };
+
     // ── STEP 1: Scrape ──────────────────────────────────────────
-    log(`[${jobId.slice(0, 8)}] Đang scrape: ${sourceUrl}`);
+    await track(`Đang scrape: ${sourceUrl}`, "Scrape bài viết");
     const article = await scrapeArticle(sourceUrl);
-    log(`[${jobId.slice(0, 8)}] Bài: "${article.title}"`);
+    await track(`Bài: "${article.title}"`);
 
     // ── STEP 2: AI Script ────────────────────────────────────────
-    log(`[${jobId.slice(0, 8)}] Beeknoee AI (gpt-oss-120b) tạo kịch bản...`);
+    await track(`${config.aiProvider === "groq" ? "Groq" : "Beeknoee"} AI tạo kịch bản...`, "AI viết kịch bản");
     const script = await generateScript(article, {
       apiKey: config.aiApiKey ?? config.deepseekApiKey ?? "",
       channelGoal: config.channelGoal,
@@ -58,35 +73,45 @@ export async function processVideoJob(
       aiProvider: config.aiProvider,
       aiModel: config.aiModel,
     });
-    log(`[${jobId.slice(0, 8)}] Script: "${script.title}"`);
+    await track(`Script: "${script.title}"`);
 
     // ── STEP 3: Render ───────────────────────────────────────────
-    log(`[${jobId.slice(0, 8)}] FFmpeg render (${config.videoQuality})...`);
+    await track(`FFmpeg render (${config.videoQuality})...`, "Render Video");
     const videoPath = await renderVideo(script, config.videoQuality, jobId);
-    log(`[${jobId.slice(0, 8)}] Render xong: ${videoPath}`);
+    await track(`Render xong: ${videoPath}`);
 
     // ── STEP 4: TikTok (optional) ────────────────────────────────
     if (config.autoPostEnabled && config.tiktokApiKey && config.tiktokApiSecret) {
-      log(`[${jobId.slice(0, 8)}] Đăng lên TikTok...`);
+      await track(`Đăng lên TikTok...`, "Đăng TikTok");
       try {
         await publishToTikTok(
           videoPath,
           `${script.hook}\n\n${script.callToAction}`,
           { appKey: config.tiktokApiKey, appSecret: config.tiktokApiSecret }
         );
-        log(`[${jobId.slice(0, 8)}] TikTok OK`);
+        await track(`TikTok OK`);
       } catch (tikErr) {
-        log(`[${jobId.slice(0, 8)}] TikTok warning: ${tikErr instanceof Error ? tikErr.message : String(tikErr)}`);
+        await track(`TikTok warning: ${tikErr instanceof Error ? tikErr.message : String(tikErr)}`);
       }
     }
 
     // ── DONE ─────────────────────────────────────────────────────
     await setStatus(jobId, "completed", { resultUrl: videoPath });
-    log(`[${jobId.slice(0, 8)}] ✅ Hoàn thành`);
+    await track(`✅ Hoàn thành`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log(`[${jobId.slice(0, 8)}] ❌ Lỗi: ${msg}`);
-    await setStatus(jobId, "failed").catch(() => {});
+    
+    // Lưu thẳng logs và errorDetails
+    await connectDB();
+    await VideoJobModel.updateOne(
+      { jobId },
+      {
+        $set: { status: "failed", currentStep: "Thất bại", errorDetails: msg, completedAt: new Date() },
+        $push: { logs: `❌ Lỗi: ${msg}` }
+      }
+    ).catch(() => {});
+    
     throw err;
   }
 }

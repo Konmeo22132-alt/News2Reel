@@ -1,12 +1,22 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Plus, Loader2, CheckCircle, XCircle, Link, ExternalLink } from "lucide-react";
+import { Plus, Loader2, CheckCircle, XCircle, Link, ExternalLink, Activity } from "lucide-react";
+
+type JobData = {
+  id: string;
+  sourceUrl: string;
+  status: string;
+  resultUrl: string | null;
+  logs: string[];
+  currentStep: string;
+  errorDetails: string | null;
+};
 
 type JobState =
   | { phase: "idle" }
   | { phase: "creating" }
-  | { phase: "polling"; jobId: string }
+  | { phase: "polling"; jobId: string; jobData?: JobData }
   | { phase: "done"; resultUrl: string }
   | { phase: "error"; message: string };
 
@@ -20,6 +30,7 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
   const [state, setState] = useState<JobState>({ phase: "idle" });
   const [statusText, setStatusText] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   // Poll job status
   useEffect(() => {
@@ -30,38 +41,51 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
 
     const jobId = state.jobId;
     let attempts = 0;
-    const MAX_ATTEMPTS = 120; // 10 minutes at 5s intervals
+    const MAX_ATTEMPTS = 120; // 6 minutes at 3s intervals
 
-    pollRef.current = setInterval(async () => {
+    const poll = async () => {
       attempts++;
       try {
         const res = await fetch(`/api/jobs/${jobId}`);
         const data = await res.json();
-        const job = data.job;
+        const job = data.job as JobData;
 
+        // Update working state with incoming logs
+        setState((prev) => (prev.phase === "polling" ? { ...prev, jobData: job } : prev));
+        
         if (job.status === "completed") {
           clearInterval(pollRef.current!);
           setState({ phase: "done", resultUrl: job.resultUrl ?? "" });
           setStatusText("Video đã sẵn sàng!");
         } else if (job.status === "failed") {
           clearInterval(pollRef.current!);
-          setState({ phase: "error", message: "Pipeline thất bại. Kiểm tra API key và nguồn URL." });
+          setState({ phase: "error", message: job.errorDetails || "Pipeline thất bại." });
         } else if (job.status === "processing") {
-          setStatusText("Pipeline đang chạy: Scrape → AI → Render...");
+          setStatusText(job.currentStep ?? "Đang xử lý...");
         } else {
           setStatusText("Đang chờ xử lý...");
         }
 
         if (attempts >= MAX_ATTEMPTS) {
           clearInterval(pollRef.current!);
-          setState({ phase: "error", message: "Timeout: Pipeline mất quá 10 phút" });
+          setState({ phase: "error", message: "Timeout: Pipeline mất quá thời gian" });
         }
       } catch {
         // Network error — keep polling
       }
-    }, 5000);
+    };
+
+    poll(); // run immediately
+    pollRef.current = setInterval(poll, 3000); // 3s polling for real-time feel
 
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [state.phase, state.jobId]); // depend strictly on phase/id to not reset interval
+
+  // Auto-scroll logs
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
   }, [state]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -162,39 +186,84 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
 
           {state.phase === "error" && (
             <div
-              className="flex items-center gap-3 p-3 rounded-lg mb-4"
+              className="flex flex-col gap-3 p-3 rounded-lg mb-4"
               style={{
                 background: "rgba(239,68,68,0.08)",
                 border: "1px solid rgba(239,68,68,0.2)",
               }}
             >
-              <XCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
-              <p className="text-sm" style={{ color: "#ef4444" }}>
-                {state.message}
-              </p>
-              <button onClick={reset} className="btn btn-ghost text-xs py-1 px-3 ml-auto">
-                Thử lại
-              </button>
+              <div className="flex items-start gap-3">
+                <XCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium" style={{ color: "#ef4444" }}>
+                    Pipeline thất bại
+                  </p>
+                  <p className="text-xs mt-1 bg-red-950/30 p-2 rounded border border-red-500/20 font-mono break-all" style={{ color: "#fca5a5" }}>
+                    {state.message}
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <button onClick={reset} className="btn btn-ghost text-xs py-1 px-3 bg-red-500/10 hover:bg-red-500/20 text-red-300">
+                  Đóng & Thử lại
+                </button>
+              </div>
             </div>
           )}
 
           {isPending && (
             <div
-              className="flex items-center gap-3 p-3 rounded-lg mb-4"
+              className="flex flex-col gap-3 p-4 rounded-lg mb-4"
               style={{
-                background: "rgba(99,102,241,0.08)",
+                background: "rgba(99,102,241,0.05)",
                 border: "1px solid rgba(99,102,241,0.2)",
               }}
             >
-              <Loader2 className="w-5 h-5 flex-shrink-0 spin" style={{ color: "#818cf8" }} />
-              <div>
-                <p className="text-sm" style={{ color: "#a5b4fc" }}>
-                  {statusText}
-                </p>
-                <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                  Scrape → Beeknoee AI → FFmpeg Render → TikTok (nếu bật)
-                </p>
+              <div className="flex items-center gap-3 border-b border-indigo-500/10 pb-3">
+                <Loader2 className="w-5 h-5 flex-shrink-0 spin" style={{ color: "#818cf8" }} />
+                <div className="flex-1">
+                  <p className="text-sm font-medium flex items-center gap-2" style={{ color: "#a5b4fc" }}>
+                    {statusText}
+                  </p>
+                  <div className="flex items-center gap-2 mt-1.5 text-[11px] font-medium" style={{ color: "var(--text-muted)" }}>
+                    {["Scrape bài viết", "AI viết kịch bản", "Render Video", "Đăng TikTok"].map((step, idx, arr) => {
+                      const isActive = state.phase === "polling" && state.jobData?.currentStep === step;
+                      return (
+                        <span key={step} className="flex items-center gap-1">
+                          <span className={`${isActive ? "text-indigo-400" : ""}`}>{step}</span>
+                          {idx < arr.length - 1 && <span className="text-gray-700 mx-1">/</span>}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
+              
+              {/* Real-time Logs Console */}
+              {state.phase === "polling" && state.jobData && (
+                <div 
+                  ref={scrollRef}
+                  className="bg-[#09090b] rounded-md p-3 text-[11px] font-mono leading-relaxed h-[180px] overflow-y-auto"
+                  style={{ border: "1px solid rgba(255,255,255,0.05)" }}
+                >
+                  <div className="flex items-center gap-2 mb-2 pb-2 border-b border-white/5 opacity-50">
+                    <Activity className="w-3 h-3" />
+                    <span>Real-time Pipeline Logs</span>
+                  </div>
+                  {state.jobData.logs?.map((log, i) => (
+                    <div key={i} className="mb-1 opacity-80" style={{ color: log.includes("❌") ? "#ef4444" : "#a5b4fc" }}>
+                      <span className="opacity-50 mr-2">{">"}</span>{log}
+                    </div>
+                  ))}
+                  {state.jobData.logs?.length === 0 && (
+                    <div className="opacity-30 italic">Đang chờ khởi tạo container...</div>
+                  )}
+                  <div className="flex items-center gap-2 mt-2 opacity-30">
+                    <span className="flex h-1.5 w-1.5 rounded-full bg-indigo-400 animate-ping"></span>
+                    Đang theo dõi...
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -264,7 +333,7 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
               </div>
 
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Pipeline: Thu thập bài → Beeknoee AI tạo kịch bản → FFmpeg render video → Đăng TikTok (nếu bật)
+                Pipeline: Thu thập bài → AI tạo kịch bản → FFmpeg render video → Đăng TikTok
               </p>
             </form>
           )}
