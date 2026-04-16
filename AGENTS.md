@@ -32,7 +32,7 @@ URL bài viết → Scrape nội dung → DeepSeek AI viết kịch bản → Go
 | Styling     | **TailwindCSS 3.x** + Vanilla CSS (globals.css)|
 | UI Icons    | **Lucide React**                              |
 | UI Library  | **Radix UI** (label, select, separator, slot, switch, tabs, toast) |
-| AI          | **DeepSeek API** (OpenAI-compatible)          |
+| AI          | **Multi-Provider** (Beeknoee, Groq) via OpenAI-compatible API |
 | TTS         | **Google Translate TTS** (free, no API key)   |
 | Video       | **FFmpeg** (fluent-ffmpeg + ffmpeg-static)    |
 | Scraping    | **Cheerio** + native fetch                    |
@@ -102,18 +102,21 @@ autovideo-admin/
 ### Collections:
 
 #### `app_config` — Singleton (1 document)
-| Field             | Type    | Default  | Notes                           |
-|-------------------|---------|----------|---------------------------------|
-| deepseekApiKey    | String? | null     | DeepSeek API key                |
-| videoQuality      | String  | "720p"   | "720p" or "1080p"               |
-| dailyVideoLimit   | Number  | 10       | Max videos per day              |
-| newsSources       | String  | "[]"     | JSON array of URLs              |
-| channelGoal       | String  | "ads"    | "ads" / "affiliate" / "branding"|
-| tiktokApiKey      | String? | null     | TikTok developer app key        |
-| tiktokApiSecret   | String? | null     | TikTok developer app secret     |
-| autoPostEnabled   | Boolean | false    | Auto-post to TikTok after render|
-| customPrompt      | String? | null     | Custom AI prompt rules          |
-| updatedAt         | Date    | auto     | Mongoose timestamps             |
+| Field             | Type    | Default      | Notes                           |
+|-------------------|---------|--------------|---------------------------------|
+| deepseekApiKey    | String? | null         | Legacy field for AI key         |
+| aiProvider        | String  | "beeknoee"   | "beeknoee" or "groq"            |
+| aiApiKey          | String? | null         | Active AI API key               |
+| aiModel           | String? | null         | Active AI model override        |
+| videoQuality      | String  | "720p"       | "720p" or "1080p"               |
+| dailyVideoLimit   | Number  | 10           | Max videos per day              |
+| newsSources       | String  | "[]"         | JSON array of URLs              |
+| channelGoal       | String  | "ads"        | "ads" / "affiliate" / "branding"|
+| tiktokApiKey      | String? | null         | TikTok developer app key        |
+| tiktokApiSecret   | String? | null         | TikTok developer app secret     |
+| autoPostEnabled   | Boolean | false        | Auto-post to TikTok after render|
+| customPrompt      | String? | null         | Custom AI prompt rules          |
+| updatedAt         | Date    | auto         | Mongoose timestamps             |
 
 #### `video_jobs` — One per video task
 | Field       | Type    | Default   | Notes                          |
@@ -188,10 +191,10 @@ autovideo-admin/
 
 ## 8. Video Pipeline Chi tiết
 
-1. **Scraper** (`lib/scraper.ts`): Fetch HTML → cheerio parse → extract title + content (content selectors priority list). Fallback: AMP version. Supports vnexpress, tuoitre, thanhnien, dantri, baomoi, vietnamnet, 24h.
-2. **AI** (`lib/ai.ts`): Send article to DeepSeek API → structured JSON response (title, hook, 5 scenes, CTA). System prompt adapts to channelGoal (ads/affiliate/branding) + customPrompt.
+1. **Scraper** (`lib/scraper.ts`): Fetch HTML → cheerio parse → extract title + content (content selectors priority list). Selector specific to sites like VNExpress (`.fck_detail`, `.sidebar-1`), etc.
+2. **AI** (`lib/ai.ts`): Send article to AI API (Beeknoee/Groq) → structured JSON response (title, hook, 5 scenes, CTA). Fallback auto-repair if JSON fields are missing (e.g. model ignores `response_format`).
 3. **TTS** (`lib/tts.ts`): Split narration → Google Translate TTS chunks (≤180 chars each) → concatenate MP3.
-4. **Renderer** (`lib/video-renderer.ts`): For each scene: TTS audio → ffprobe duration → FFmpeg drawtext on color bg → concat all segments. Output: 1080x1920 (9:16), MP4 in `public/videos/`.
+4. **Renderer** (`lib/video-renderer.ts`): For each scene: TTS audio → ffprobe duration → FFmpeg drawtext on color bg (`lavfi`) → concat all segments. Output: 1080x1920 (9:16), MP4 in `public/videos/`. Use system `ffmpeg` over static to ensure `lavfi` availability.
 5. **TikTok** (`lib/tiktok.ts`): (Optional) Init upload → PUT file → poll status. Requires OAuth access_token.
 
 ---
@@ -264,7 +267,7 @@ cd /var/www/News2Reel && git fetch origin && git reset --hard origin/main && rm 
 - Prisma files vẫn còn (legacy) — KHÔNG sử dụng, có thể xóa
 - TikTok auto-post cần OAuth access_token (chưa có OAuth flow UI)
 - Google TTS có thể bị rate-limit nếu tạo nhiều video liên tục
-- FFmpeg cần được cài trên server (ffmpeg-static chỉ hoạt động tốt trên local)
+- FFmpeg: Bắt buộc phải được cài đặt trên VPS (Ubuntu: `apt install ffmpeg`) để library sử dụng được format nội bộ `lavfi` tạo background video. `ffmpeg-static` đi kèm NPM không hỗ trợ `lavfi`.
 - dev.db (SQLite) vẫn còn trong root — legacy, có thể xóa
 
 ### TODO / Planned:
@@ -280,8 +283,9 @@ cd /var/www/News2Reel && git fetch origin && git reset --hard origin/main && rm 
 
 | Ngày       | Thay đổi                                                     |
 |------------|---------------------------------------------------------------|
+| 2026-04-16 | Fix pipeline: Scraper hỗ trợ VNExpress + Multi-provider AI (Groq/Beeknoee) + JSON repair mechanism + Prefer System FFmpeg for `lavfi`. Lệnh deploy update `pm2`
 | 2026-04-15 | Tạo AGENTS.md — ghi lại toàn bộ kiến trúc dự án lần đầu     |
-| 2026-04-15 | **Migrate AI API từ DeepSeek sang Beeknoee** (platform.beeknoee.com, model: openai/gpt-oss-120b). Chỉ đổi URL + model trong `lib/ai.ts`, field DB `deepseekApiKey` giữ nguyên tên nhưng lưu Beeknoee key (sk-bee-...) |
+| 2026-04-15 | Migrate AI API từ DeepSeek sang Beeknoee.
 | 2026-04-11 | Migrate từ SQLite/Prisma sang MongoDB/Mongoose                |
 | 2026-04-11 | Fix hydration errors với ClientDate component                 |
 | 2026-04-08 | Khởi tạo dự án AutoVideo Admin Panel                         |
