@@ -1,15 +1,25 @@
 /**
- * AI Script Generator — calls Beeknoee API (OpenAI-compatible)
+ * AI Script Generator — calls an OpenAI-compatible API
  * to turn a scraped article into a structured TikTok video script.
  *
- * Provider: platform.beeknoee.com
- * Model: openai/gpt-oss-120b
+ * Supported providers (set via .env on VPS):
+ *   - Beeknoee: platform.beeknoee.com  (default)
+ *   - Groq:     api.groq.com/openai/v1  (faster, generous free tier)
+ *   - DeepSeek: api.deepseek.com
+ *
+ * Env vars (optional overrides, set in /var/www/News2Reel/.env):
+ *   AI_BASE_URL=https://api.groq.com/openai/v1
+ *   AI_MODEL=llama-3.3-70b-versatile
  */
 
 import type { ScrapedArticle, VideoScript } from "./types";
 
 const BEEKNOEE_API_URL = "https://platform.beeknoee.com/api/v1/chat/completions";
-const MODEL = "openai/gpt-oss-120b";
+
+// Allow overriding provider via env vars (useful for switching to Groq/DeepSeek)
+const API_BASE = process.env.AI_BASE_URL ?? BEEKNOEE_API_URL.replace("/chat/completions", "");
+const API_URL = `${API_BASE}/chat/completions`;
+const MODEL = process.env.AI_MODEL ?? "openai/gpt-oss-120b";
 
 const GOAL_PROMPT: Record<string, string> = {
   ads: `Tạo nội dung giật tít, hook mạnh trong 3 giây đầu, tối ưu watch time và retention rate. Sử dụng ngôn ngữ gây tò mò, shock value phù hợp.`,
@@ -73,7 +83,7 @@ export async function generateScript(
 
     let response: Response;
     try {
-      response = await fetch(BEEKNOEE_API_URL, {
+      response = await fetch(API_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -82,6 +92,7 @@ export async function generateScript(
         body,
         signal: AbortSignal.timeout(90_000),
       });
+      console.log(`[AI] Provider: ${API_URL} | Model: ${MODEL}`);
     } catch (fetchErr) {
       lastError = fetchErr instanceof Error ? fetchErr : new Error(String(fetchErr));
       console.error(`[AI] Fetch attempt ${attempt} failed:`, lastError.message);
