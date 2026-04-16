@@ -1,7 +1,10 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
 
 export interface IAppConfig extends Document {
-  deepseekApiKey: string | null;
+  deepseekApiKey: string | null;  // legacy field, kept for backward compat
+  aiProvider: string;             // "beeknoee" | "groq"
+  aiApiKey: string | null;        // API key for selected provider
+  aiModel: string | null;         // Model name override
   videoQuality: string;
   dailyVideoLimit: number;
   newsSources: string; // JSON array string
@@ -16,6 +19,9 @@ export interface IAppConfig extends Document {
 const AppConfigSchema = new Schema<IAppConfig>(
   {
     deepseekApiKey: { type: String, default: null },
+    aiProvider: { type: String, default: "beeknoee" },
+    aiApiKey: { type: String, default: null },
+    aiModel: { type: String, default: null },
     videoQuality: { type: String, default: "720p" },
     dailyVideoLimit: { type: Number, default: 10 },
     newsSources: { type: String, default: "[]" },

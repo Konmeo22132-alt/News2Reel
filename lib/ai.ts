@@ -2,24 +2,26 @@
  * AI Script Generator — calls an OpenAI-compatible API
  * to turn a scraped article into a structured TikTok video script.
  *
- * Supported providers (set via .env on VPS):
- *   - Beeknoee: platform.beeknoee.com  (default)
- *   - Groq:     api.groq.com/openai/v1  (faster, generous free tier)
- *   - DeepSeek: api.deepseek.com
- *
- * Env vars (optional overrides, set in /var/www/News2Reel/.env):
- *   AI_BASE_URL=https://api.groq.com/openai/v1
- *   AI_MODEL=llama-3.3-70b-versatile
+ * Supported providers:
+ *   - beeknoee: platform.beeknoee.com (default)
+ *   - groq:     api.groq.com/openai/v1 (fast, generous free tier)
  */
 
 import type { ScrapedArticle, VideoScript } from "./types";
 
-const BEEKNOEE_API_URL = "https://platform.beeknoee.com/api/v1/chat/completions";
+const PROVIDER_URLS: Record<string, string> = {
+  beeknoee: "https://platform.beeknoee.com/api/v1/chat/completions",
+  groq:     "https://api.groq.com/openai/v1/chat/completions",
+};
 
-// Allow overriding provider via env vars (useful for switching to Groq/DeepSeek)
-const API_BASE = process.env.AI_BASE_URL ?? BEEKNOEE_API_URL.replace("/chat/completions", "");
-const API_URL = `${API_BASE}/chat/completions`;
-const MODEL = process.env.AI_MODEL ?? "openai/gpt-oss-120b";
+const DEFAULT_MODELS: Record<string, string> = {
+  beeknoee: "openai/gpt-oss-120b",
+  groq:     "llama-3.3-70b-versatile",
+};
+
+// Allow env var overrides (useful for quick switching without redeploy)
+const ENV_BASE = process.env.AI_BASE_URL;
+const ENV_MODEL = process.env.AI_MODEL;
 
 const GOAL_PROMPT: Record<string, string> = {
   ads: `Tạo nội dung giật tít, hook mạnh trong 3 giây đầu, tối ưu watch time và retention rate. Sử dụng ngôn ngữ gây tò mò, shock value phù hợp.`,
@@ -51,12 +53,24 @@ Tổng thời lượng các scenes phải từ 45-90 giây. Viết bằng tiến
 
 export async function generateScript(
   article: ScrapedArticle,
-  config: { apiKey: string; channelGoal: string; customPrompt?: string | null }
+  config: {
+    apiKey: string;
+    channelGoal: string;
+    customPrompt?: string | null;
+    aiProvider?: string;
+    aiModel?: string | null;
+  }
 ): Promise<VideoScript> {
   const { apiKey, channelGoal, customPrompt } = config;
+  const provider = config.aiProvider ?? "beeknoee";
+  const apiUrl  = ENV_BASE ? `${ENV_BASE}/chat/completions`
+                           : (PROVIDER_URLS[provider] ?? PROVIDER_URLS.beeknoee);
+  const model   = ENV_MODEL ?? config.aiModel ?? DEFAULT_MODELS[provider] ?? DEFAULT_MODELS.beeknoee;
+
+  console.log(`[AI] Provider: ${provider} | Model: ${model} | URL: ${apiUrl}`);
 
   const body = JSON.stringify({
-    model: MODEL,
+    model,
     messages: [
       {
         role: "system",
@@ -83,7 +97,7 @@ export async function generateScript(
 
     let response: Response;
     try {
-      response = await fetch(API_URL, {
+      response = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -92,7 +106,6 @@ export async function generateScript(
         body,
         signal: AbortSignal.timeout(90_000),
       });
-      console.log(`[AI] Provider: ${API_URL} | Model: ${MODEL}`);
     } catch (fetchErr) {
       lastError = fetchErr instanceof Error ? fetchErr : new Error(String(fetchErr));
       console.error(`[AI] Fetch attempt ${attempt} failed:`, lastError.message);

@@ -18,6 +18,9 @@ import { updateConfig, type ConfigFormData } from "@/app/actions/config";
 type AppConfig = {
   id: number;
   deepseekApiKey: string | null;
+  aiProvider: string;
+  aiApiKey: string | null;
+  aiModel: string | null;
   videoQuality: string;
   dailyVideoLimit: number;
   newsSources: string;
@@ -82,7 +85,10 @@ export default function SettingsForm({ config }: { config: AppConfig }) {
   const [showTts, setShowTts] = useState(false);
 
   // Form state
-  const [deepseekApiKey, setDeepseekApiKey] = useState(config.deepseekApiKey ?? "");
+  const [aiProvider, setAiProvider] = useState(config.aiProvider ?? "beeknoee");
+  const [aiApiKey, setAiApiKey]     = useState(config.aiApiKey ?? config.deepseekApiKey ?? "");
+  const [aiModel, setAiModel]       = useState(config.aiModel ?? "");
+  const [deepseekApiKey, setDeepseekApiKey] = useState(config.deepseekApiKey ?? ""); // legacy
   const [videoQuality, setVideoQuality] = useState(config.videoQuality);
   const [dailyVideoLimit, setDailyVideoLimit] = useState(String(config.dailyVideoLimit));
   const [newsSources, setNewsSources] = useState(() => {
@@ -112,7 +118,10 @@ export default function SettingsForm({ config }: { config: AppConfig }) {
         .filter(Boolean);
 
       const data: ConfigFormData = {
-        deepseekApiKey: deepseekApiKey || undefined,
+        aiProvider,
+        aiApiKey: aiApiKey || undefined,
+        aiModel: aiModel || undefined,
+        deepseekApiKey: aiApiKey || undefined, // keep legacy in sync
         videoQuality,
         dailyVideoLimit: parseInt(dailyVideoLimit, 10) || 10,
         newsSources: JSON.stringify(sources),
@@ -166,14 +175,54 @@ export default function SettingsForm({ config }: { config: AppConfig }) {
       {/* Tab: AI & Rendering */}
       {tab === "ai" && (
         <div className="card p-5 space-y-5 fade-up">
+
+          {/* Provider selector */}
           <div>
-            <label style={labelStyle}>Beeknoee API Key</label>
+            <label style={labelStyle}>Nhà cung cấp AI</label>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { v: "beeknoee", name: "Beeknoee",  badge: "VN",   color: "#818cf8", desc: "platform.beeknoee.com" },
+                { v: "groq",     name: "Groq",       badge: "Free", color: "#f59e0b", desc: "api.groq.com — Nhanh hơn" },
+              ] as const).map(({ v, name, badge, color, desc }) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => {
+                    setAiProvider(v);
+                    // Reset model to provider default if user hasn't customized
+                    if (!aiModel) setAiModel("");
+                  }}
+                  className="p-3.5 rounded-lg text-left transition-all"
+                  style={{
+                    background: aiProvider === v ? "rgba(99,102,241,0.12)" : "var(--surface-3)",
+                    border: aiProvider === v ? "1px solid rgba(99,102,241,0.35)" : "1px solid var(--border)",
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <p className="text-sm font-semibold" style={{ color: aiProvider === v ? "#c7d2fe" : "var(--text-secondary)" }}>
+                      {name}
+                    </p>
+                    <span className="text-xs px-1.5 py-0.5 rounded font-bold" style={{ background: `${color}22`, color }}>
+                      {badge}
+                    </span>
+                  </div>
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>{desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* API Key */}
+          <div>
+            <label style={labelStyle}>
+              {aiProvider === "groq" ? "Groq API Key" : "Beeknoee API Key"}
+            </label>
             <div className="relative">
               <input
                 type={showDk ? "text" : "password"}
-                value={deepseekApiKey}
-                onChange={(e) => setDeepseekApiKey(e.target.value)}
-                placeholder="sk-bee-..."
+                value={aiApiKey}
+                onChange={(e) => setAiApiKey(e.target.value)}
+                placeholder={aiProvider === "groq" ? "gsk_..." : "sk-bee-..."}
                 className="input pr-10 font-mono text-sm"
               />
               <button
@@ -185,11 +234,36 @@ export default function SettingsForm({ config }: { config: AppConfig }) {
                 {showDk ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            {deepseekApiKey && (
+            {aiApiKey && (
               <p className="text-xs mt-1.5" style={{ color: "#10b981" }}>
-                ● Beeknoee API Key đã được cấu hình
+                ● API Key đã cấu hình
               </p>
             )}
+            {aiProvider === "groq" && !aiApiKey && (
+              <p className="text-xs mt-1.5" style={{ color: "#f59e0b" }}>
+                Lấy API key miễn phí tại{" "}
+                <a href="https://console.groq.com" target="_blank" rel="noopener noreferrer" style={{ color: "#818cf8" }}>
+                  console.groq.com
+                </a>
+              </p>
+            )}
+          </div>
+
+          {/* Model name */}
+          <div>
+            <label style={labelStyle}>Model Name (để trống = dùng mặc định)</label>
+            <input
+              type="text"
+              value={aiModel}
+              onChange={(e) => setAiModel(e.target.value)}
+              placeholder={aiProvider === "groq" ? "llama-3.3-70b-versatile" : "openai/gpt-oss-120b"}
+              className="input font-mono text-sm"
+            />
+            <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+              {aiProvider === "groq"
+                ? "Groq models: llama-3.3-70b-versatile, llama-3.1-8b-instant, mixtral-8x7b-32768"
+                : "Beeknoee models: openai/gpt-oss-120b, anthropic/claude-3-haiku"}
+            </p>
           </div>
 
           <div>

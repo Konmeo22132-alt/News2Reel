@@ -11,7 +11,10 @@ export type VideoJob = {
 
 export type AppConfig = {
   id: number;
-  deepseekApiKey: string | null;
+  deepseekApiKey: string | null; // legacy
+  aiProvider: string;            // "beeknoee" | "groq"
+  aiApiKey: string | null;       // active API key
+  aiModel: string | null;        // active model name
   videoQuality: string;
   dailyVideoLimit: number;
   newsSources: string; // JSON array string

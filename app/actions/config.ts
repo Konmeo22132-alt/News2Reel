@@ -21,6 +21,9 @@ export async function getConfig(): Promise<AppConfig> {
 
 export type ConfigFormData = {
   deepseekApiKey?: string;
+  aiProvider?: string;
+  aiApiKey?: string;
+  aiModel?: string;
   videoQuality?: string;
   dailyVideoLimit?: number;
   newsSources?: string;
@@ -41,6 +44,9 @@ export async function updateConfig(
       {
         $set: {
           ...(data.deepseekApiKey !== undefined && { deepseekApiKey: data.deepseekApiKey || null }),
+          ...(data.aiProvider !== undefined && { aiProvider: data.aiProvider }),
+          ...(data.aiApiKey !== undefined && { aiApiKey: data.aiApiKey || null }),
+          ...(data.aiModel !== undefined && { aiModel: data.aiModel || null }),
           ...(data.videoQuality !== undefined && { videoQuality: data.videoQuality }),
           ...(data.dailyVideoLimit !== undefined && { dailyVideoLimit: data.dailyVideoLimit }),
           ...(data.newsSources !== undefined && { newsSources: data.newsSources }),
@@ -124,6 +130,9 @@ function mongoToConfig(doc: any): AppConfig {
   return {
     id: 1,
     deepseekApiKey: doc.deepseekApiKey ?? null,
+    aiProvider: doc.aiProvider ?? "beeknoee",
+    aiApiKey: doc.aiApiKey ?? doc.deepseekApiKey ?? null, // fallback to legacy key
+    aiModel: doc.aiModel ?? null,
     videoQuality: doc.videoQuality ?? "720p",
     dailyVideoLimit: doc.dailyVideoLimit ?? 10,
     newsSources: doc.newsSources ?? "[]",
