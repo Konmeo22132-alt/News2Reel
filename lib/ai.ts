@@ -11,12 +11,12 @@ import type { ScrapedArticle, VideoScript } from "./types";
 
 const PROVIDER_URLS: Record<string, string> = {
   beeknoee: "https://platform.beeknoee.com/api/v1/chat/completions",
-  groq:     "https://api.groq.com/openai/v1/chat/completions",
+  groq: "https://api.groq.com/openai/v1/chat/completions",
 };
 
 const DEFAULT_MODELS: Record<string, string> = {
   beeknoee: "openai/gpt-oss-120b",
-  groq:     "llama-3.3-70b-versatile",
+  groq: "llama-3.3-70b-versatile",
 };
 
 // Allow env var overrides (useful for quick switching without redeploy)
@@ -63,9 +63,9 @@ export async function generateScript(
 ): Promise<VideoScript> {
   const { apiKey, channelGoal, customPrompt } = config;
   const provider = config.aiProvider ?? "beeknoee";
-  const apiUrl  = ENV_BASE ? `${ENV_BASE}/chat/completions`
-                           : (PROVIDER_URLS[provider] ?? PROVIDER_URLS.beeknoee);
-  const model   = ENV_MODEL ?? config.aiModel ?? DEFAULT_MODELS[provider] ?? DEFAULT_MODELS.beeknoee;
+  const apiUrl = ENV_BASE ? `${ENV_BASE}/chat/completions`
+    : (PROVIDER_URLS[provider] ?? PROVIDER_URLS.beeknoee);
+  const model = ENV_MODEL ?? config.aiModel ?? DEFAULT_MODELS[provider] ?? DEFAULT_MODELS.beeknoee;
 
   console.log(`[AI] Provider: ${provider} | Model: ${model} | URL: ${apiUrl}`);
 
@@ -83,7 +83,7 @@ export async function generateScript(
     ],
     temperature: 0.7,
     max_tokens: 1500,
-    response_format: { type: "json_object" },
+    // Note: response_format removed — not supported by all providers/models
   });
 
   // Retry up to 3 times on 429 (rate limit)
@@ -126,20 +126,38 @@ export async function generateScript(
     const json = await response.json();
     const raw = json?.choices?.[0]?.message?.content;
 
-    if (!raw) throw new Error("Beeknoee API trả về kết quả rỗng");
+    // Log raw to help debug malformed responses
+    if (!raw) {
+      console.log(`[AI] Response JSON keys: ${Object.keys(json ?? {}).join(", ")}`);
+      console.log(`[AI] choices: ${JSON.stringify(json?.choices?.slice(0, 1))}`);
+      throw new Error("AI API trả về kết quả rỗng");
+    }
+    console.log(`[AI] Raw response (first 200): ${raw.slice(0, 200)}`);
 
     let script: VideoScript;
     try {
-      // Strip markdown code fences if model wraps JSON in ```json...```
-      const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-      script = JSON.parse(cleaned);
+      // Strip markdown code fences
+      const cleaned = raw
+        .replace(/^```(?:json)?\s*/im, "")
+        .replace(/```\s*$/m, "")
+        .trim();
+      // Handle cases where model returns partial JSON or wraps in extra text
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      script = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
     } catch {
-      throw new Error(`Không thể parse JSON từ Beeknoee: ${raw.slice(0, 200)}`);
+      throw new Error(`Không thể parse JSON: ${raw.slice(0, 300)}`);
     }
 
-    // Validate structure
-    if (!script.title || !script.hook || !Array.isArray(script.scenes)) {
-      throw new Error("Cấu trúc kịch bản không hợp lệ");
+    // Auto-repair: fill in missing required fields with sensible defaults
+    if (!script.title)     script.title = article.title.slice(0, 80);
+    if (!script.hook)      script.hook  = script.title;
+    if (!script.callToAction) script.callToAction = "Theo dõi kênh để không bỏ lỡ!";
+    if (!Array.isArray(script.scenes) || script.scenes.length === 0) {
+      // Try to build scenes from any content field the model may have returned
+      const fallback = (script as Record<string, unknown>).content
+        ?? (script as Record<string, unknown>).narration
+        ?? article.content.slice(0, 400);
+      script.scenes = [{ narration: String(fallback).slice(0, 400), duration: 60 }];
     }
 
     return script;
