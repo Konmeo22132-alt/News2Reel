@@ -234,6 +234,17 @@ npm run dev        # → http://localhost:3000
 # Login: password = giá trị ADMIN_PASSWORD trong .env
 ```
 
+### 🚀 Deploy lên VPS (One-shot command)
+
+```bash
+cd /var/www/News2Reel && git fetch origin && git reset --hard origin/main && rm -rf .next && npm run build && pm2 restart autovideo-3069
+```
+
+- **Repo path**: `/var/www/News2Reel`
+- **PM2 app name**: `autovideo-3069`
+- **Port**: `3069`
+- **Domain**: `video.konmeo22132.dev` (Nginx reverse proxy)
+
 ---
 
 ## 12. Trạng thái & Ghi chú
