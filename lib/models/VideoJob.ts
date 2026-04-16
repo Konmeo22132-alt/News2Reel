@@ -28,7 +28,7 @@ const VideoJobSchema = new Schema(
 
 VideoJobSchema.index({ createdAt: -1 });
 VideoJobSchema.index({ status: 1 });
-VideoJobSchema.index({ jobId: 1 });
+// Note: jobId already has an implicit unique index via `unique: true` — do NOT add schema.index({ jobId: 1 }) again
 
 // Cast to Model<IVideoJob> for type-safe queries
 export const VideoJobModel = (

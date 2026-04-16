@@ -51,7 +51,7 @@ export async function updateConfig(
           ...(data.customPrompt !== undefined && { customPrompt: data.customPrompt || null }),
         },
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: "after" }
     );
     revalidatePath("/settings");
     revalidatePath("/dashboard");
