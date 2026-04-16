@@ -144,7 +144,7 @@ export default async function DashboardPage() {
             <div className="py-14 text-center" style={{ color: "var(--text-muted)" }}>
               <VideoIcon className="w-10 h-10 mx-auto mb-2 opacity-30" />
               <p className="text-sm">Chưa có video nào được tạo</p>
-              <p className="text-xs mt-1">Nhấn "Tạo video mới" để bắt đầu pipeline</p>
+              <p className="text-xs mt-1">Nhấn &ldquo;Tạo video mới&rdquo; để bắt đầu pipeline</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
