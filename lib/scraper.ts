@@ -55,7 +55,7 @@ const NOISE_SELECTORS = [
   "script", "style", "nav", "header", "footer", "aside",
   ".advertisement", ".ads", '[class*="ad-"]', '[class*="popup"]',
   '[class*="cookie"]', '[class*="share"]', '[class*="social"]',
-  '[class*="related"]', '[class*="sidebar"]', "figure", "iframe",
+  '[class*="related"]', ".sidebar", ".sidebar-2", "#sidebar", "figure", "iframe",
   // VnExpress specific noise
   ".box-morelink", ".related_news", ".block_related", ".block-related",
   ".tag-events", ".box-tinlienquan", ".box-tinlienquanv2",
