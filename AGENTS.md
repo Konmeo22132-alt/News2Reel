@@ -119,14 +119,17 @@ autovideo-admin/
 | updatedAt         | Date    | auto         | Mongoose timestamps             |
 
 #### `video_jobs` — One per video task
-| Field       | Type    | Default   | Notes                          |
-|-------------|---------|-----------|--------------------------------|
-| jobId       | String  | uuid      | Unique, indexed                |
-| sourceUrl   | String  | required  | Article URL                    |
-| status      | String  | "pending" | pending/processing/completed/failed |
-| resultUrl   | String? | null      | `/videos/video_<jobId>.mp4`    |
-| createdAt   | Date    | auto      | Indexed descending             |
-| completedAt | Date?   | null      | Set on completed/failed        |
+| Field       | Type      | Default   | Notes                          |
+|-------------|-----------|-----------|--------------------------------|
+| jobId       | String    | uuid      | Unique, indexed                |
+| sourceUrl   | String    | required  | Article URL                    |
+| status      | String    | "pending" | pending/processing/completed/failed |
+| resultUrl   | String?   | null      | `/videos/video_<jobId>.mp4`    |
+| currentStep | String    | "Đang khởi tạo" | Pipeline step (e.g., Scrape bài viết) |
+| logs        | String[]  | `[]`      | Real-time pipeline console logs|
+| errorDetails| String?   | null      | Detail error msg if failed     |
+| createdAt   | Date      | auto      | Indexed descending             |
+| completedAt | Date?     | null      | Set on completed/failed        |
 
 ---
 
@@ -283,6 +286,7 @@ cd /var/www/News2Reel && git fetch origin && git reset --hard origin/main && rm 
 
 | Ngày       | Thay đổi                                                     |
 |------------|---------------------------------------------------------------|
+| 2026-04-16 | Build hệ thống Real-time Pipeline UI. VideoJob lưu thêm mảng `logs`, `currentStep`, `errorDetails`. CreateVideoForm poll API mỗi 3 giây hiện console log.|
 | 2026-04-16 | Fix pipeline: Scraper hỗ trợ VNExpress + Multi-provider AI (Groq/Beeknoee) + JSON repair mechanism + Prefer System FFmpeg for `lavfi`. Lệnh deploy update `pm2`
 | 2026-04-15 | Tạo AGENTS.md — ghi lại toàn bộ kiến trúc dự án lần đầu     |
 | 2026-04-15 | Migrate AI API từ DeepSeek sang Beeknoee.
