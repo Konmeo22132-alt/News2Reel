@@ -230,7 +230,8 @@ export async function renderVideo(
     const outputPath = path.join(OUTPUT_DIR, outputFileName);
     await concatSegments(ffmpeg, segmentPaths, outputPath);
 
-    return `/videos/${outputFileName}`;
+    // MÁNH KHÓE CHO NEXTJS (TRÁNH LỖI 404 KHI BUILD PRODUCTION)
+    return `/api/stream/videos/${outputFileName}`;
   } finally {
     // Cleanup all temp files
     for (const p of [...segmentPaths, ...mp3Paths]) {
