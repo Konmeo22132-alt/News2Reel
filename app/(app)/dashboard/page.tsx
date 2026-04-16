@@ -34,7 +34,7 @@ export default async function DashboardPage() {
   const { config, todayCompleted, recentJobs, dailyUsage } =
     await getDashboardStats();
 
-  const apiOk = !!config.deepseekApiKey;
+  const apiOk = !!config.aiApiKey;
   const usagePct = Math.min(
     Math.round((dailyUsage / config.dailyVideoLimit) * 100),
     100
