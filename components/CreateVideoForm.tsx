@@ -79,7 +79,7 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
     pollRef.current = setInterval(poll, 3000); // 3s polling for real-time feel
 
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [state.phase, state.jobId]); // depend strictly on phase/id to not reset interval
+  }, [state.phase, state.phase === "polling" ? state.jobId : null]); // depend strictly on phase/id to not reset interval
 
   // Auto-scroll logs
   useEffect(() => {
