@@ -171,7 +171,13 @@ export async function renderVideo(
 
   const { default: ffmpeg } = await import("fluent-ffmpeg");
   const { default: ffmpegPath } = await import("ffmpeg-static");
-  if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
+  
+  // Ưu tiên dùng ffmpeg của Linux VPS (thường hỗ trợ đầy đủ lavfi filter)
+  if (fs.existsSync("/usr/bin/ffmpeg")) {
+    ffmpeg.setFfmpegPath("/usr/bin/ffmpeg");
+  } else if (ffmpegPath) {
+    ffmpeg.setFfmpegPath(ffmpegPath);
+  }
 
   const width = 1080;
   const height = 1920;
