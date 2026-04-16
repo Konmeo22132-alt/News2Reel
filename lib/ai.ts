@@ -45,54 +45,81 @@ export async function generateScript(
 ): Promise<VideoScript> {
   const { apiKey, channelGoal, customPrompt } = config;
 
-  const response = await fetch(BEEKNOEE_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      messages: [
-        {
-          role: "system",
-          content: SYSTEM_PROMPT(channelGoal, customPrompt ?? ""),
-        },
-        {
-          role: "user",
-          content: `Bài viết:\nTiêu đề: ${article.title}\n\nNội dung:\n${article.content}`,
-        },
-      ],
-      temperature: 0.7,
-      max_tokens: 1500,
-      response_format: { type: "json_object" },
-    }),
-    signal: AbortSignal.timeout(60_000),
+  const body = JSON.stringify({
+    model: MODEL,
+    messages: [
+      {
+        role: "system",
+        content: SYSTEM_PROMPT(channelGoal, customPrompt ?? ""),
+      },
+      {
+        role: "user",
+        content: `Bài viết:\nTiêu đề: ${article.title}\n\nNội dung:\n${article.content}`,
+      },
+    ],
+    temperature: 0.7,
+    max_tokens: 1500,
+    response_format: { type: "json_object" },
   });
 
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Beeknoee API error ${response.status}: ${err}`);
+  // Retry up to 3 times on 429 (rate limit)
+  let lastError: Error = new Error("Unknown error");
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    if (attempt > 1) {
+      const wait = attempt * 10_000; // 10s, 20s back-off
+      console.log(`[AI] Rate limited, retry ${attempt}/3 sau ${wait / 1000}s...`);
+      await new Promise((r) => setTimeout(r, wait));
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(BEEKNOEE_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body,
+        signal: AbortSignal.timeout(90_000),
+      });
+    } catch (fetchErr) {
+      lastError = fetchErr instanceof Error ? fetchErr : new Error(String(fetchErr));
+      console.error(`[AI] Fetch attempt ${attempt} failed:`, lastError.message);
+      continue;
+    }
+
+    if (response.status === 429) {
+      lastError = new Error(`Beeknoee rate limited (429). Thử lại sau ít phút.`);
+      continue; // retry
+    }
+
+    if (!response.ok) {
+      // Read only first 500 chars of error to avoid body-read timeout
+      const errText = await response.text().then((t) => t.slice(0, 500)).catch(() => "");
+      throw new Error(`Beeknoee API error ${response.status}: ${errText}`);
+    }
+
+    const json = await response.json();
+    const raw = json?.choices?.[0]?.message?.content;
+
+    if (!raw) throw new Error("Beeknoee API trả về kết quả rỗng");
+
+    let script: VideoScript;
+    try {
+      // Strip markdown code fences if model wraps JSON in ```json...```
+      const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+      script = JSON.parse(cleaned);
+    } catch {
+      throw new Error(`Không thể parse JSON từ Beeknoee: ${raw.slice(0, 200)}`);
+    }
+
+    // Validate structure
+    if (!script.title || !script.hook || !Array.isArray(script.scenes)) {
+      throw new Error("Cấu trúc kịch bản không hợp lệ");
+    }
+
+    return script;
   }
 
-  const json = await response.json();
-  const raw = json?.choices?.[0]?.message?.content;
-
-  if (!raw) throw new Error("Beeknoee API trả về kết quả rỗng");
-
-  let script: VideoScript;
-  try {
-    // Strip markdown code fences if model ignores response_format and wraps JSON in ```json...```
-    const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-    script = JSON.parse(cleaned);
-  } catch {
-    throw new Error(`Không thể parse JSON từ Beeknoee: ${raw.slice(0, 200)}`);
-  }
-
-  // Validate structure
-  if (!script.title || !script.hook || !Array.isArray(script.scenes)) {
-    throw new Error("Cấu trúc kịch bản không hợp lệ");
-  }
-
-  return script;
+  throw lastError;
 }
