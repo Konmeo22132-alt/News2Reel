@@ -82,7 +82,7 @@ export async function generateScript(
       },
     ],
     temperature: 0.7,
-    max_tokens: 1500,
+    max_tokens: 8000,
     // Note: response_format removed — not supported by all providers/models
   });
 
