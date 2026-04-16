@@ -11,7 +11,7 @@ export type VideoJob = {
 
 export type AppConfig = {
   id: number;
-  deepseekApiKey: string | null; // legacy
+  ClaudeApiKey: string | null; // legacy
   aiProvider: string;            // "beeknoee" | "groq"
   aiApiKey: string | null;       // active API key
   aiModel: string | null;        // active model name
@@ -32,6 +32,15 @@ export type ScrapedArticle = {
   url: string;
 };
 
+// Visual IDs for scene visuals (matches AI script engine)
+export const VISUAL_IDS = [
+  "laptop", "rocket", "skull", "warning", "code_window",
+  "terminal", "robot", "chip", "globe", "lock",
+  "chart", "dollar", "fire", "star", "lightning",
+] as const;
+
+export type VisualID = typeof VISUAL_IDS[number];
+
 export type VideoScript = {
   title: string;
   hook: string;       // First 3s attention grabber
@@ -40,8 +49,9 @@ export type VideoScript = {
 };
 
 export type ScriptScene = {
-  narration: string;  // Text to display / narrate
+  narration: string;  // Text to display / narrate (may include <keyword> tags)
   duration: number;   // Seconds
+  visual_id: VisualID; // Visual element for this scene
   bgColor?: string;
 };
 

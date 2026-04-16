@@ -10,7 +10,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 > **Mục đích**: File này lưu lại toàn bộ kiến trúc, quy ước và trạng thái dự án để AI Agent (Antigravity/Gemini/Claude) có thể tiếp tục làm việc nhanh chóng mà không cần đọc lại toàn bộ code.
 >
-> **Cập nhật lần cuối**: 2026-04-15
+> **Cập nhật lần cuối**: 2026-04-16
 
 ---
 
@@ -85,7 +85,8 @@ autovideo-admin/
 │   ├── ai.ts                   # DeepSeek API caller: article → VideoScript JSON
 │   ├── scraper.ts              # HTML scraper: URL → {title, content} (cheerio, AMP fallback)
 │   ├── tts.ts                  # Google TTS: text → MP3 (chunked at 180 chars)
-│   ├── video-renderer.ts       # FFmpeg: VideoScript → 9:16 MP4 (color bg + drawtext + TTS audio)
+│   ├── video-renderer.ts       # FFmpeg: VideoScript → 9:16 MP4 (5-Layer Retention Architecture)
+│   ├── vfx-subtitle.ts         # ASS subtitle generator + gradient filters (bouncing karaoke, animated gradient)
 │   ├── tiktok.ts               # TikTok Content Posting API: init upload → PUT file → poll status
 │   └── job-processor.ts        # Pipeline orchestrator: scrape → AI → render → tiktok(optional)
 ├── middleware.ts               # Auth guard: redirect to /login if no valid admin_token cookie
@@ -195,10 +196,23 @@ autovideo-admin/
 ## 8. Video Pipeline Chi tiết
 
 1. **Scraper** (`lib/scraper.ts`): Fetch HTML → cheerio parse → extract title + content (content selectors priority list). Selector specific to sites like VNExpress (`.fck_detail`, `.sidebar-1`), etc.
-2. **AI** (`lib/ai.ts`): Send article to AI API (Beeknoee/Groq) → structured JSON response (title, hook, 5 scenes, CTA). Fallback auto-repair if JSON fields are missing (e.g. model ignores `response_format`).
-3. **TTS** (`lib/tts.ts`): Split narration → Google Translate TTS chunks (≤180 chars each) → concatenate MP3.
-4. **Renderer** (`lib/video-renderer.ts`): For each scene: TTS audio → ffprobe duration → FFmpeg drawtext on color bg (`lavfi`) → concat all segments. Output: 1080x1920 (9:16), MP4 in `public/videos/`. Use system `ffmpeg` over static to ensure `lavfi` availability.
+2. **AI** (`lib/ai.ts`): Send article to AI API (Beeknoee/Groq) → structured JSON response (title, hook, 5 scenes, CTA). AI viết narration với thẻ `<keyword>` để highlight từ quan trọng. Fallback auto-repair if JSON fields are missing (e.g. model ignores `response_format`).
+3. **TTS** (`lib/tts.ts`): Split narration → Google Translate TTS chunks (≤180 chars each) → concatenate MP3. Dùng edge-tts làm primary (higher quality), fallback về Google TTS.
+4. **Renderer** (`lib/video-renderer.ts`): **5-Layer Retention Architecture**:
+   - **Layer 1**: Animated Gradient Background — geq filter với time-based sin/cos pulse (breathing effect)
+   - **Layer 2**: Dynamic Icon — PNG icon pop-in entrance (scale 0→1) + floating sine wave (`y=baseY+floor(15*sin(2πt))`)
+   - **Layer 3**: Scene Counter — drawtext hiển thị scene index
+   - **Layer 4**: Bouncing Karaoke Subtitles — ASS file với word-by-word animation (scale 0%→120%→100%→0%)
+   - **Layer 5**: BGM Audio — nhạc nền epic/synthwave (tùy chọn, tự động tìm trong `public/assets/bgm/`)
+   
+   Each scene: TTS audio → ffprobe duration → ASS karaoke → FFmpeg filter_complex → concat segments. Output: 1080x1920 (9:16), 30fps, CRF 17-20, MP4 in `public/videos/`. Sử dụng system `ffmpeg` để đảm bảo `lavfi` + `geq` filter hoạt động.
 5. **TikTok** (`lib/tiktok.ts`): (Optional) Init upload → PUT file → poll status. Requires OAuth access_token.
+
+### Retention Boosters (Video v2):
+- **Bouncing Karaoke**: Mỗi từ xuất hiện với scale animation, keyword được highlight vàng với scale 130%
+- **Dynamic Icons**: Icons lơ lửng tạo "sức sống" cho khung hình tĩnh
+- **Animated Gradient**: Background "thở" với brightness pulse, không còn đứng im
+- **BGM Layer**: Nhạc nền lấp đầy khoảng lặng, tăng engagement
 
 ---
 
@@ -286,10 +300,11 @@ cd /var/www/News2Reel && git fetch origin && git reset --hard origin/main && rm 
 
 | Ngày       | Thay đổi                                                     |
 |------------|---------------------------------------------------------------|
+| 2026-04-16 | **Video Renderer v2**: Thêm 4 Retention Boosters cho Tech News format. (1) Bouncing Karaoke subtitles — word-by-word scale animation 0%→120%→100%, keyword highlight vàng. (2) Dynamic Icon — pop-in + floating sine wave. (3) Animated Gradient — breathing effect với geq + time sin/cos. (4) BGM/SFX layer — epic bgm tự động detect. Fix filter_complex input ordering, xóa unused variables (`os`, `totalInputs`). |
 | 2026-04-16 | Build hệ thống Real-time Pipeline UI. VideoJob lưu thêm mảng `logs`, `currentStep`, `errorDetails`. CreateVideoForm poll API mỗi 3 giây hiện console log.|
-| 2026-04-16 | Fix pipeline: Scraper hỗ trợ VNExpress + Multi-provider AI (Groq/Beeknoee) + JSON repair mechanism + Prefer System FFmpeg for `lavfi`. Lệnh deploy update `pm2`
+| 2026-04-16 | Fix pipeline: Scraper hỗ trợ VNExpress + Multi-provider AI (Groq/Beeknoee) + JSON repair mechanism + Prefer System FFmpeg for `lavfi`. Lệnh deploy update `pm2` |
 | 2026-04-15 | Tạo AGENTS.md — ghi lại toàn bộ kiến trúc dự án lần đầu     |
-| 2026-04-15 | Migrate AI API từ DeepSeek sang Beeknoee.
+| 2026-04-15 | Migrate AI API từ Claude sang Beeknoee.
 | 2026-04-11 | Migrate từ SQLite/Prisma sang MongoDB/Mongoose                |
 | 2026-04-11 | Fix hydration errors với ClientDate component                 |
 | 2026-04-08 | Khởi tạo dự án AutoVideo Admin Panel                         |

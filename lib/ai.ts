@@ -1,10 +1,11 @@
 /**
  * AI Script Generator — calls an OpenAI-compatible API
  * to turn a scraped article into a structured TikTok video script.
- *
- * Supported providers:
- *   - beeknoee: platform.beeknoee.com (default)
- *   - groq:     api.groq.com/openai/v1 (fast, generous free tier)
+ * 
+ * Features:
+ * - Tech-style narration with <keyword> tags for highlighting
+ * - Visual IDs for matching scene visuals
+ * - Fast-paced, engaging content optimized for TikTok
  */
 
 import type { ScrapedArticle, VideoScript } from "./types";
@@ -19,36 +20,67 @@ const DEFAULT_MODELS: Record<string, string> = {
   groq: "llama-3.3-70b-versatile",
 };
 
-// Allow env var overrides (useful for quick switching without redeploy)
+// Allow env var overrides
 const ENV_BASE = process.env.AI_BASE_URL;
 const ENV_MODEL = process.env.AI_MODEL;
 
+// Visual IDs for FFmpeg layer
+export const VISUAL_IDS = [
+  "laptop", "rocket", "skull", "warning", "code_window",
+  "terminal", "robot", "chip", "globe", "lock",
+  "chart", "dollar", "fire", "star", "lightning",
+] as const;
+
+export type VisualID = typeof VISUAL_IDS[number];
+
+// Goal prompts
 const GOAL_PROMPT: Record<string, string> = {
   ads: `Tạo nội dung giật tít, hook mạnh trong 3 giây đầu, tối ưu watch time và retention rate. Sử dụng ngôn ngữ gây tò mò, shock value phù hợp.`,
   affiliate: `Tạo nội dung nổi bật tính năng/lợi ích sản phẩm, cài Call-to-Action rõ ràng như "Link in bio", "Mua ngay", "Xem chi tiết". Thúc đẩy hành động mua hàng.`,
   branding: `Tạo nội dung chuyên nghiệp, cung cấp giá trị thực sự. Xây dựng uy tín và hình ảnh chuyên gia. Tông giọng tự tin, đáng tin cậy.`,
 };
 
+/**
+ * Tech-style system prompt for TikTok Tech Reviewer
+ * Creates fast-paced, engaging scripts with keyword highlighting
+ */
 const SYSTEM_PROMPT = (goal: string, customPrompt: string) => `
-Bạn là một chuyên gia sản xuất nội dung TikTok người Việt. Hãy tạo kịch bản video ngắn (60-90 giây) từ bài viết tin tức được cung cấp.
+Bạn là một TikTok Tech Reviewer chuyên nghiệp. Hãy tạo kịch bản video ngắn (45-90 giây) từ bài viết được cung cấp.
 
 Mục tiêu kênh: ${GOAL_PROMPT[goal] ?? GOAL_PROMPT.ads}
 ${customPrompt ? `\nQuy tắc bổ sung từ chủ kênh:\n${customPrompt}` : ""}
 
-Trả về JSON với cấu trúc CHÍNH XÁC sau (không thêm text ngoài JSON):
+NGUYÊN TẮC VIẾT KỊCH BẢN:
+1. Viết CỰC KỲ SÚC TÍCH - mỗi câu tối đa 10-15 từ tiếng Việt
+2. Câu văn phải bị CHẶT NHỎ làm nhiều CẢNH (scenes), mỗi cảnh 5-10 giây
+3. BỌC các TỪ KHOÁ quan trọng bằng thẻ <keyword>Từ Khoá</keyword>
+4. Mỗi scene TRẢ VỀ 1 visual_id ngẫu nhiên từ danh sách: ${VISUAL_IDS.join(", ")}
+
+TRẢ VỀ JSON với cấu trúc CHÍNH XÁC sau (không thêm text ngoài JSON):
 {
-  "title": "Tiêu đề video ngắn gọn",
-  "hook": "Câu hook kéo scroll trong 3 giây đầu (tối đa 15 từ)",
+  "title": "Tiêu đề video ngắn gọn, gây tò mò (tối đa 60 ký tự)",
+  "hook": "Câu hook cực mạnh trong 3 giây đầu (tối đa 15 từ)",
   "scenes": [
-    {"narration": "Nội dung cảnh 1 (40-60 từ)", "duration": 10},
-    {"narration": "Nội dung cảnh 2 (40-60 từ)", "duration": 10},
-    {"narration": "Nội dung cảnh 3 (40-60 từ)", "duration": 10},
-    {"narration": "Nội dung cảnh 4 (40-60 từ)", "duration": 10},
-    {"narration": "Nội dung cảnh 5 (40-60 từ)", "duration": 10}
+    {
+      "narration": "Nội dung cảnh 1 ngắn gọn, bọc <keyword>từ quan trọng</keyword> trong thẻ keyword",
+      "duration": 6,
+      "visual_id": "laptop"
+    },
+    {
+      "narration": "Nội dung cảnh 2 ngắn gọn, bọc <keyword>từ quan trọng</keyword> trong thẻ keyword",
+      "duration": 6,
+      "visual_id": "code_window"
+    }
   ],
-  "callToAction": "Lời kêu gọi hành động cuối video"
+  "callToAction": "Lời kêu gọi hành động cuối video (tối đa 20 từ)"
 }
-Tổng thời lượng các scenes phải từ 45-90 giây. Viết bằng tiếng Việt tự nhiên, dễ hiểu.
+
+QUY TẮC QUAN TRỌNG:
+- Tổng thời lượng scenes phải từ 45-90 giây
+- VIẾT BẰNG TIẾNG VIỆT TỰ NHIÊN, DỄ HIỂU
+- Ngôn ngữ súc tích, KHÔNG RƯỜM RA
+- Hook phải GÂY CHÁN ÊM, buộc người xem phải xem tiếp
+- Không bọc tất cả từ trong keyword, CHỈ NHỮNG từ thật sự QUAN TRỌNG hoặc buzzwords
 `.trim();
 
 export async function generateScript(
@@ -81,9 +113,8 @@ export async function generateScript(
         content: `Bài viết:\nTiêu đề: ${article.title}\n\nNội dung:\n${article.content}`,
       },
     ],
-    temperature: 0.7,
+    temperature: 0.8,
     max_tokens: 8000,
-    // Note: response_format removed — not supported by all providers/models
   });
 
   // Retry up to 3 times on 429 (rate limit)
@@ -113,26 +144,23 @@ export async function generateScript(
     }
 
     if (response.status === 429) {
-      lastError = new Error(`Beeknoee rate limited (429). Thử lại sau ít phút.`);
+      lastError = new Error(`Rate limited (429). Thử lại sau ít phút.`);
       continue; // retry
     }
 
     if (!response.ok) {
-      // Read only first 500 chars of error to avoid body-read timeout
       const errText = await response.text().then((t) => t.slice(0, 500)).catch(() => "");
-      throw new Error(`Beeknoee API error ${response.status}: ${errText}`);
+      throw new Error(`AI API error ${response.status}: ${errText}`);
     }
 
     const json = await response.json();
     const raw = json?.choices?.[0]?.message?.content;
 
-    // Log raw to help debug malformed responses
     if (!raw) {
       console.log(`[AI] Response JSON keys: ${Object.keys(json ?? {}).join(", ")}`);
-      console.log(`[AI] choices: ${JSON.stringify(json?.choices?.slice(0, 1))}`);
       throw new Error("AI API trả về kết quả rỗng");
     }
-    console.log(`[AI] Raw response (first 200): ${raw.slice(0, 200)}`);
+    console.log(`[AI] Raw response (first 300): ${raw.slice(0, 300)}`);
 
     let script: VideoScript;
     try {
@@ -141,23 +169,36 @@ export async function generateScript(
         .replace(/^```(?:json)?\s*/im, "")
         .replace(/```\s*$/m, "")
         .trim();
-      // Handle cases where model returns partial JSON or wraps in extra text
+      // Handle cases where model returns partial JSON
       const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-      script = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
+      const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
+      
+      // Normalize to VideoScript format
+      script = {
+        title: parsed.title || article.title.slice(0, 60),
+        hook: parsed.hook || parsed.title || "",
+        scenes: (parsed.scenes || []).map((s: Record<string, unknown>) => ({
+          narration: s.narration || s.text || s.content || "",
+          duration: Number(s.duration) || 6,
+          visual_id: s.visual_id || VISUAL_IDS[Math.floor(Math.random() * VISUAL_IDS.length)],
+        })),
+        callToAction: parsed.callToAction || parsed.cta || "Theo dõi kênh để không bỏ lỡ!",
+      };
     } catch {
       throw new Error(`Không thể parse JSON: ${raw.slice(0, 300)}`);
     }
 
-    // Auto-repair: fill in missing required fields with sensible defaults
-    if (!script.title)     script.title = article.title.slice(0, 80);
-    if (!script.hook)      script.hook  = script.title;
+    // Auto-repair: fill in missing required fields
+    if (!script.title) script.title = article.title.slice(0, 60);
+    if (!script.hook) script.hook = script.title;
     if (!script.callToAction) script.callToAction = "Theo dõi kênh để không bỏ lỡ!";
+    
     if (!Array.isArray(script.scenes) || script.scenes.length === 0) {
-      // Try to build scenes from any content field the model may have returned
-      const fallback = (script as Record<string, unknown>).content
-        ?? (script as Record<string, unknown>).narration
-        ?? article.content.slice(0, 400);
-      script.scenes = [{ narration: String(fallback).slice(0, 400), duration: 60 }];
+      script.scenes = [{
+        narration: article.content.slice(0, 200),
+        duration: 30,
+        visual_id: "laptop",
+      }];
     }
 
     return script;
