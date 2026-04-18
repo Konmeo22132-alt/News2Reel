@@ -132,9 +132,12 @@ export function buildCounterFilter(
   const numY = Math.floor(height * 0.28);
   const lblY = numY + 260;
 
-  // The expression: int(min(t/RAMP, 1) * END)
-  // Escaping: \: inside text='...' for filter_complex, \, for commas inside expr
-  const countExpr = `%{expr_int_format\\:min(max(t\\,0)/${RAMP}\\,1)*${END}\\:d\\:0}`;
+  // Use frame number `n` (integer, 30fps) for perfectly smooth odometer.
+  // Avoids floating-point time jitter that causes "jumping" with `t`.
+  // Formula: if(n > RAMP_FRAMES, END, n * END / RAMP_FRAMES)
+  // No min/max needed → no commas inside %{...} → zero escaping issues.
+  const RAMP_F = Math.round(30 * parseFloat(RAMP)); // frames until full value
+  const countExpr = `%{expr_int_format\\:if(gt(n\\,${RAMP_F})\\,${END}\\,n*${END}/${RAMP_F})\\:d\\:0}`;
   const displayText = `${prefix}${countExpr}${suffix}`;
 
   let f = `[${inputLabel}]`;
@@ -412,16 +415,17 @@ export function buildChecklistFilter(
   for (let i = 0; i < items.length; i++) {
     const y = startY + i * LINE_H;
     const checkDelay = i * STAGGER;
-    const textDelay = checkDelay + 0.1; // text follows checkmark by 100ms
+    const textDelay = checkDelay + 0.1;
     const text = esc(items[i].slice(0, 36));
     const isLast = i === items.length - 1;
+    const SLIDE = 35; // pixels to slide up from
 
-    // ✓ checkmark fades in first
-    f += `drawtext=text='✓':x=${CHECK_X}:y=${y}:fontsize=68:fontcolor=0x00FF88:fontfile='${FONT_BOLD}'${GLOW}${fadeIn(checkDelay, 0.2)}`;
+    // ✓ checkmark: fades in + slides up
+    f += `drawtext=text='✓':x=${CHECK_X}:y='${y + SLIDE}-${SLIDE}*min(max(t-${checkDelay.toFixed(2)},0)/0.3,1)':fontsize=68:fontcolor=0x00FF88:fontfile='${FONT_BOLD}'${GLOW}${fadeIn(checkDelay, 0.3)}`;
     f = chain(f, `cl${n++}`);
 
-    // Text fades in 100ms after checkmark
-    f += `drawtext=text='${text}':x=${TEXT_X}:y=${y + 4}:fontsize=60:fontcolor=0xFFFFFF:fontfile='${FONT_BOLD}'${GLOW}${fadeIn(textDelay, 0.2)}`;
+    // Item text: fades in 100ms after checkmark, also slides up
+    f += `drawtext=text='${text}':x=${TEXT_X}:y='${y + SLIDE + 4}-${SLIDE}*min(max(t-${textDelay.toFixed(2)},0)/0.3,1)':fontsize=60:fontcolor=0xFFFFFF:fontfile='${FONT_BOLD}'${GLOW}${fadeIn(textDelay, 0.3)}`;
 
     if (!isLast) {
       f = chain(f, `cl${n++}`);

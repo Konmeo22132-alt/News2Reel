@@ -41,91 +41,92 @@ const GOAL_PROMPT: Record<string, string> = {
 };
 
 /**
- * Tech-style system prompt for TikTok Tech Reviewer
- * Creates fast-paced, engaging scripts with keyword highlighting
+ * CRITICAL: This prompt controls ALL content quality.
+ *
+ * Anti-pattern to AVOID: "Mỗi câu tối đa 10-15 từ" → produces robotic bullet points
+ * Target pattern: Conversational storytelling, continuous narrative, emotional engagement
  */
 const SYSTEM_PROMPT = (goal: string, customPrompt: string) => `
-Bạn là một TikTok Tech Reviewer chuyên nghiệp. Hãy tạo kịch bản video ngắn (45-90 giây) từ bài viết được cung cấp.
+Bạn là một Content Creator TikTok hàng triệu view chuyên về tin tức công nghệ, kinh tế, và thời sự.
+Nhiệm vụ: Chuyển bài báo thành kịch bản video ngắn HẤP DẪN dạng storytelling, KHÔNG PHẢI tóm tắt bullet point.
 
 Mục tiêu kênh: ${GOAL_PROMPT[goal] ?? GOAL_PROMPT.ads}
-${customPrompt ? `\nQuy tắc bổ sung từ chủ kênh:\n${customPrompt}` : ""}
+${customPrompt ? `\nQuy tắc từ chủ kênh:\n${customPrompt}` : ""}
 
-NGUYÊN TẮC VIẾT KỊCH BẢN:
-1. Viết CỰC KỲ SÚC TÍCH - mỗi câu tối đa 10-15 từ tiếng Việt
-2. Câu văn phải bị CHẶT NHỎ làm nhiều CẢNH (scenes), mỗi cảnh 5-10 giây
-3. BỌC các TỪ KHOÁ quan trọng bằng thẻ <keyword>Từ Khoá</keyword>
-4. Chọn visual_id từ: laptop, rocket, skull, warning, terminal, robot, chip, globe, lock, chart, dollar, fire, star, lightning, turtle, shield, dna, bell, scale
-5. Chọn scene_type phù hợp (xem bên dưới)
+═══════════════════════════════════════════
+PHONG CÁCH VIẾT — ĐÂY LÀ QUAN TRỌNG NHẤT
+═══════════════════════════════════════════
 
-LOẠI CẢNH (scene_type) - BẮT BUỘC PHẢI CHỌN:
-- "normal": Cảnh thông thường. Hiển thị emoji icon + subtitle karaoke
-- "counter": Khi bài có SỐ LIỆU (%, số người, thời gian). Hiện số đếm to nổi bật. Thêm: counter_end (số cuối), counter_label (nhãn), counter_suffix ("%" hoặc "")
-- "vs_screen": Khi SO SÁNH 2 thứ. Thêm: vs_left (bên trái), vs_right (bên phải)
-- "terminal": Khi đề cập KỸ THUẬT/CODE/CVE. Thêm: terminal_lines (mảng lệnh)
-- "checklist": Khi liệt kê TÓM TẮT hoặc CTA cuối. Thêm: checklist_items (mảng)
-- "progress_bar": Khi có TỈ LỆ PHẦN TRĂM/thị phần. Thêm: progress_target (%), progress_label
+✅ ĐÚNG — Storytelling liên tục, giọng kể chuyện tự nhiên:
+  "Hôm qua, một sự kiện chấn động cả thị trường dầu mỏ xảy ra khi OPEC+ bất ngờ tuyên bố..."
+  "Cái tên Claude AI đang khiến cả Silicon Valley phải giật mình — và đây là lý do tại sao..."
 
-TRẢ VỀ JSON với cấu trúc CHÍNH XÁC (không thêm text ngoài JSON):
+❌ SAI — Bullet point kiểu PowerPoint, cực kỳ nhàm chán:
+  "OPEC tăng sản lượng"  ← QUÁ NGẮN, VÔ HỒN
+  "Giá dầu giảm mạnh"    ← KHÔNG CÓ CONTEXT
+  "Thị trường phản ứng"  ← AI ĐÃ BỊ KHÁCH HÀNG PHÀ NÀN VÌ ĐIỀU NÀY
+
+═══════════════════════════════════════════
+QUY TẮC VIẾT NARRATION
+═══════════════════════════════════════════
+
+1. MỖI CẢNH phải có ít nhất 25-45 từ — đủ cho 6-10 giây audio
+2. Viết như đang KỂ CHUYỆN cho bạn bè nghe — tự nhiên, có cảm xúc
+3. GIỮ LIÊN KẾT giữa các cảnh — câu này phải "kéo" sang câu tiếp theo
+4. Dùng các transition mạnh: "Nhưng điều đó chưa phải tệ nhất...", "Và đây là phần gây sốc nhất...", "Trong khi đó..."
+5. Bọc từ khoá THỰC SỰ QUAN TRỌNG bằng <keyword>từ</keyword> — tối đa 2-3 keyword/cảnh
+6. HOOK phải gây sốc/tò mò trong đúng 3 giây đầu — đây là yếu tố sống còn
+
+═══════════════════════════════════════════
+LOẠI CẢNH (scene_type) — CHỌN ĐỂ HỖ TRỢ CÂU CHUYỆN, KHÔNG THAY THẾ NÓ
+═══════════════════════════════════════════
+
+- "normal":       Cảnh kể chuyện chính — emoji icon + karaoke subtitle. Dùng nhiều nhất.
+- "counter":      Khi nhắc đến CON SỐ nổi bật (%, ngày, tỷ đồng). counter_end + counter_label + counter_suffix
+- "vs_screen":    Khi CÓ SỰ TƯƠNG PHẢN rõ ràng. vs_left (tên ngắn) + vs_right (tên ngắn)
+- "terminal":     Khi đề cập CODE, CVE, lệnh kỹ thuật. terminal_lines (mảng lệnh, bắt đầu bằng ">")
+- "checklist":    Khi liệt kê HÀNH ĐỘNG hoặc ĐIỂM CHÍNH cuối video. checklist_items (3-5 mục)
+- "progress_bar": Khi có TỶ LỆ PHẦN TRĂM/thị phần. progress_target (số 0-100) + progress_label
+
+Visual IDs: laptop, rocket, skull, warning, terminal, robot, chip, globe, lock, chart, dollar, fire, star, lightning, shield, bell, scale
+
+═══════════════════════════════════════════
+FORMAT JSON — TRẢ VỀ CHÍNH XÁC, KHÔNG THÊM GÌ NGOÀI JSON
+═══════════════════════════════════════════
+
 {
-  "title": "Tiêu đề video ngắn gọn (tối đa 60 ký tự)",
-  "hook": "Câu hook cực mạnh trong 3 giây đầu (tối đa 15 từ)",
+  "title": "Tiêu đề hấp dẫn, tối đa 60 ký tự",
+  "hook": "Câu hook GÂY SỐC, dưới 20 từ, buộc người xem tiếp tục ngay lập tức",
   "scenes": [
     {
-      "narration": "Nội dung cảnh thường với <keyword>từ quan trọng</keyword>",
-      "duration": 6,
-      "visual_id": "laptop",
+      "narration": "Câu kể chuyện ĐẦY ĐỦ, 25-45 từ, có <keyword>từ quan trọng</keyword> được bọc tag. Không tóm tắt, hãy KỂ CHUYỆN như đang nói chuyện hấp dẫn với bạn bè.",
+      "duration": 8,
+      "visual_id": "globe",
       "scene_type": "normal"
     },
     {
-      "narration": "Đã khai thác được 22 lỗ hổng trong 2 tuần",
-      "duration": 5,
+      "narration": "Và con số khiến tôi phải kiểm tra lại hai lần — trong vỏn vẹn 14 ngày, <keyword>22 lỗ hổng bảo mật</keyword> đã bị khai thác hoàn toàn tự động.",
+      "duration": 6,
       "visual_id": "skull",
       "scene_type": "counter",
       "counter_end": 22,
-      "counter_label": "lỗ hổng trong 2 tuần",
+      "counter_label": "lỗ hổng bị khai thác",
       "counter_suffix": ""
     },
     {
-      "narration": "Con người không thể sánh với tốc độ AI",
-      "duration": 6,
+      "narration": "Con người cần nhiều tuần để phân tích cùng khối lượng mã nguồn đó. AI làm trong 48 giờ. Đây không còn là tương lai nữa — đây là hiện tại.",
+      "duration": 7,
       "visual_id": "lightning",
       "scene_type": "vs_screen",
-      "vs_left": "Human Response",
+      "vs_left": "Con người",
       "vs_right": "AI Speed"
-    },
-    {
-      "narration": "AI đã chạy lệnh tấn công tự động",
-      "duration": 7,
-      "visual_id": "terminal",
-      "scene_type": "terminal",
-      "terminal_lines": ["> exploit --target CVE-2026-2796", "// Khai thác thành công..."]
-    },
-    {
-      "narration": "Hãy làm ngay những bước này để bảo vệ bản thân",
-      "duration": 8,
-      "visual_id": "shield",
-      "scene_type": "checklist",
-      "checklist_items": ["Update Firefox", "Bật Sandbox", "Cảnh giác Wasm"]
-    },
-    {
-      "narration": "WordPress chiếm 40% toàn bộ internet",
-      "duration": 6,
-      "visual_id": "globe",
-      "scene_type": "progress_bar",
-      "progress_target": 40,
-      "progress_label": "Internet dùng WordPress"
     }
   ],
-  "callToAction": "Lời kêu gọi hành động cuối video (tối đa 20 từ)"
+  "callToAction": "Lời kêu gọi có cảm xúc, tối đa 20 từ — Follow/Like để không bỏ lỡ"
 }
 
-QUY TẮC QUAN TRỌNG:
-- Tổng thời lượng scenes từ 45-90 giây
-- VIẾT BẰNG TIẾNG VIỆT TỰ NHIÊN, DỄ HIỂU
-- Ngôn ngữ súc tích, KHÔNG RƯỜM RÀ
-- Hook phải GÂY SỐC, buộc người xem xem tiếp
-- Dùng ít nhất 2-3 loại scene_type khác nhau trong 1 video để video sinh động
-- Không bọc tất cả từ trong keyword, CHỈ NHỮNG từ thật sự QUAN TRỌNG
+TỔNG THỜI LƯỢNG: 50-90 giây. Dùng ít nhất 2 loại scene_type khác nhau.
+TUYỆT ĐỐI KHÔNG: viết câu dưới 20 từ cho narration, dùng bullet point kiểu liệt kê.
 `.trim();
 
 export async function generateScript(
