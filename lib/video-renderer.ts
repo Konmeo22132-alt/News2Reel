@@ -33,6 +33,11 @@ import {
   ASS_COLORS,
   DEFAULT_ASS_STYLE,
   saveASSFile,
+  buildCounterFilter,
+  buildVSScreenFilter,
+  buildTerminalFilter,
+  buildChecklistFilter,
+  buildProgressBarFilter,
 } from "./vfx-subtitle";
 
 type FfmpegStatic = typeof import("fluent-ffmpeg");
@@ -194,11 +199,89 @@ async function renderScene(opts: {
     filterComplex += counterFilter;
   }
 
-  // ── Layer 4: ASS subtitles (bouncing karaoke) ──
-  // Wrap path in single quotes to handle spaces. Escape : and ' chars.
+  // ── Layer 4: Scene-type special overlays + ASS subtitles ──
   const baseLabel = isMiddleScene ? "base" : (hasIcon ? "with_icon" : hasTerminal ? "with_box" : "bg");
-  const assEscaped = assPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\''");
-  filterComplex += `[${baseLabel}]ass='${assEscaped}'[out]`;
+  const sceneType = (opts as any).scene_type || "normal";
+
+  if (sceneType === "counter" && (opts as any).counter_end != null) {
+    const s = opts as any;
+    filterComplex += buildCounterFilter({
+      inputLabel: baseLabel,
+      outputLabel: "special_out",
+      end: s.counter_end,
+      label: s.counter_label,
+      prefix: s.counter_prefix || "",
+      suffix: s.counter_suffix != null ? s.counter_suffix : "",
+      width,
+      height,
+    });
+    filterComplex += "; ";
+    const assEscaped = assPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\''");
+    filterComplex += `[special_out]ass='${assEscaped}'[out]`;
+
+  } else if (sceneType === "vs_screen" && (opts as any).vs_left) {
+    const s = opts as any;
+    filterComplex += buildVSScreenFilter({
+      inputLabel: baseLabel,
+      outputLabel: "special_out",
+      leftText: s.vs_left,
+      rightText: s.vs_right || "",
+      leftColor: s.vs_left_color || "6B0000",
+      rightColor: s.vs_right_color || "003B1E",
+      width,
+      height,
+    });
+    filterComplex += "; ";
+    const assEscaped = assPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\''");
+    filterComplex += `[special_out]ass='${assEscaped}'[out]`;
+
+  } else if (sceneType === "terminal" && (opts as any).terminal_lines?.length) {
+    const s = opts as any;
+    filterComplex += buildTerminalFilter({
+      inputLabel: baseLabel,
+      outputLabel: "special_out",
+      lines: s.terminal_lines,
+      title: s.terminal_title || "",
+      width,
+      height,
+    });
+    filterComplex += "; ";
+    const assEscaped = assPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\''");
+    filterComplex += `[special_out]ass='${assEscaped}'[out]`;
+
+  } else if (sceneType === "checklist" && (opts as any).checklist_items?.length) {
+    const s = opts as any;
+    filterComplex += buildChecklistFilter({
+      inputLabel: baseLabel,
+      outputLabel: "special_out",
+      items: s.checklist_items,
+      width,
+      height,
+    });
+    filterComplex += "; ";
+    const assEscaped = assPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\''");
+    filterComplex += `[special_out]ass='${assEscaped}'[out]`;
+
+  } else if (sceneType === "progress_bar" && (opts as any).progress_target != null) {
+    const s = opts as any;
+    filterComplex += buildProgressBarFilter({
+      inputLabel: baseLabel,
+      outputLabel: "special_out",
+      target: s.progress_target,
+      label: s.progress_label || "",
+      width,
+      height,
+    });
+    filterComplex += "; ";
+    const assEscaped = assPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\''");
+    filterComplex += `[special_out]ass='${assEscaped}'[out]`;
+
+  } else {
+    // Default: "normal" scene — just ASS subtitles with bouncing karaoke
+    // Wrap path in single quotes to handle spaces. Escape : and ' chars.
+    const assEscaped = assPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\''");
+    filterComplex += `[${baseLabel}]ass='${assEscaped}'[out]`;
+  }
 
   return new Promise<void>((resolve, reject) => {
     const cmd = ffmpeg();
@@ -321,14 +404,29 @@ export async function renderVideo(
 
   // ── Build all scenes: hook + scenes + CTA ──
   const allScenes = [
-    { narration: script.hook, isHook: true, isCTA: false, visualId: "laptop" },
+    { narration: script.hook, isHook: true, isCTA: false, visualId: "rocket", scene_type: "normal" },
     ...script.scenes.map((s) => ({
       narration: s.narration,
       isHook: false,
       isCTA: false,
       visualId: (s.visual_id as string) || "chip",
+      // Forward all scene-type fields
+      scene_type: s.scene_type || "normal",
+      counter_end: s.counter_end,
+      counter_label: s.counter_label,
+      counter_suffix: s.counter_suffix,
+      counter_prefix: s.counter_prefix,
+      vs_left: s.vs_left,
+      vs_right: s.vs_right,
+      vs_left_color: s.vs_left_color,
+      vs_right_color: s.vs_right_color,
+      terminal_title: s.terminal_title,
+      terminal_lines: s.terminal_lines,
+      checklist_items: s.checklist_items,
+      progress_target: s.progress_target,
+      progress_label: s.progress_label,
     })),
-    { narration: script.callToAction, isHook: false, isCTA: true, visualId: "star" },
+    { narration: script.callToAction, isHook: false, isCTA: true, visualId: "star", scene_type: "normal" },
   ];
 
   const totalSteps = allScenes.length + 1; // scenes + concat
@@ -372,7 +470,7 @@ export async function renderVideo(
         audioPath: mp3Path,
         audioDuration: duration,
         isHook: scene.isHook,
-        isCTA: scene.isCTA,
+        isCTA: (scene as any).isCTA,
         theme,
         title: script.title,
         quality,
@@ -381,7 +479,22 @@ export async function renderVideo(
         bgmPath,
         width,
         height,
-      });
+        // Forward all scene-type fields directly
+        scene_type: (scene as any).scene_type || "normal",
+        counter_end: (scene as any).counter_end,
+        counter_label: (scene as any).counter_label,
+        counter_suffix: (scene as any).counter_suffix,
+        counter_prefix: (scene as any).counter_prefix,
+        vs_left: (scene as any).vs_left,
+        vs_right: (scene as any).vs_right,
+        vs_left_color: (scene as any).vs_left_color,
+        vs_right_color: (scene as any).vs_right_color,
+        terminal_title: (scene as any).terminal_title,
+        terminal_lines: (scene as any).terminal_lines,
+        checklist_items: (scene as any).checklist_items,
+        progress_target: (scene as any).progress_target,
+        progress_label: (scene as any).progress_label,
+      } as any);
 
       console.log(`[Renderer] ✓ Scene ${i + 1} done → ${path.basename(segPath)}`);
     }

@@ -54,33 +54,78 @@ NGUYÊN TẮC VIẾT KỊCH BẢN:
 1. Viết CỰC KỲ SÚC TÍCH - mỗi câu tối đa 10-15 từ tiếng Việt
 2. Câu văn phải bị CHẶT NHỎ làm nhiều CẢNH (scenes), mỗi cảnh 5-10 giây
 3. BỌC các TỪ KHOÁ quan trọng bằng thẻ <keyword>Từ Khoá</keyword>
-4. Mỗi scene TRẢ VỀ 1 visual_id ngẫu nhiên từ danh sách: ${VISUAL_IDS.join(", ")}
+4. Chọn visual_id từ: laptop, rocket, skull, warning, terminal, robot, chip, globe, lock, chart, dollar, fire, star, lightning, turtle, shield, dna, bell, scale
+5. Chọn scene_type phù hợp (xem bên dưới)
 
-TRẢ VỀ JSON với cấu trúc CHÍNH XÁC sau (không thêm text ngoài JSON):
+LOẠI CẢNH (scene_type) - BẮT BUỘC PHẢI CHỌN:
+- "normal": Cảnh thông thường. Hiển thị emoji icon + subtitle karaoke
+- "counter": Khi bài có SỐ LIỆU (%, số người, thời gian). Hiện số đếm to nổi bật. Thêm: counter_end (số cuối), counter_label (nhãn), counter_suffix ("%" hoặc "")
+- "vs_screen": Khi SO SÁNH 2 thứ. Thêm: vs_left (bên trái), vs_right (bên phải)
+- "terminal": Khi đề cập KỸ THUẬT/CODE/CVE. Thêm: terminal_lines (mảng lệnh)
+- "checklist": Khi liệt kê TÓM TẮT hoặc CTA cuối. Thêm: checklist_items (mảng)
+- "progress_bar": Khi có TỈ LỆ PHẦN TRĂM/thị phần. Thêm: progress_target (%), progress_label
+
+TRẢ VỀ JSON với cấu trúc CHÍNH XÁC (không thêm text ngoài JSON):
 {
-  "title": "Tiêu đề video ngắn gọn, gây tò mò (tối đa 60 ký tự)",
+  "title": "Tiêu đề video ngắn gọn (tối đa 60 ký tự)",
   "hook": "Câu hook cực mạnh trong 3 giây đầu (tối đa 15 từ)",
   "scenes": [
     {
-      "narration": "Nội dung cảnh 1 ngắn gọn, bọc <keyword>từ quan trọng</keyword> trong thẻ keyword",
+      "narration": "Nội dung cảnh thường với <keyword>từ quan trọng</keyword>",
       "duration": 6,
-      "visual_id": "laptop"
+      "visual_id": "laptop",
+      "scene_type": "normal"
     },
     {
-      "narration": "Nội dung cảnh 2 ngắn gọn, bọc <keyword>từ quan trọng</keyword> trong thẻ keyword",
+      "narration": "Đã khai thác được 22 lỗ hổng trong 2 tuần",
+      "duration": 5,
+      "visual_id": "skull",
+      "scene_type": "counter",
+      "counter_end": 22,
+      "counter_label": "lỗ hổng trong 2 tuần",
+      "counter_suffix": ""
+    },
+    {
+      "narration": "Con người không thể sánh với tốc độ AI",
       "duration": 6,
-      "visual_id": "code_window"
+      "visual_id": "lightning",
+      "scene_type": "vs_screen",
+      "vs_left": "Human Response",
+      "vs_right": "AI Speed"
+    },
+    {
+      "narration": "AI đã chạy lệnh tấn công tự động",
+      "duration": 7,
+      "visual_id": "terminal",
+      "scene_type": "terminal",
+      "terminal_lines": ["> exploit --target CVE-2026-2796", "// Khai thác thành công..."]
+    },
+    {
+      "narration": "Hãy làm ngay những bước này để bảo vệ bản thân",
+      "duration": 8,
+      "visual_id": "shield",
+      "scene_type": "checklist",
+      "checklist_items": ["Update Firefox", "Bật Sandbox", "Cảnh giác Wasm"]
+    },
+    {
+      "narration": "WordPress chiếm 40% toàn bộ internet",
+      "duration": 6,
+      "visual_id": "globe",
+      "scene_type": "progress_bar",
+      "progress_target": 40,
+      "progress_label": "Internet dùng WordPress"
     }
   ],
   "callToAction": "Lời kêu gọi hành động cuối video (tối đa 20 từ)"
 }
 
 QUY TẮC QUAN TRỌNG:
-- Tổng thời lượng scenes phải từ 45-90 giây
+- Tổng thời lượng scenes từ 45-90 giây
 - VIẾT BẰNG TIẾNG VIỆT TỰ NHIÊN, DỄ HIỂU
-- Ngôn ngữ súc tích, KHÔNG RƯỜM RA
-- Hook phải GÂY CHÁN ÊM, buộc người xem phải xem tiếp
-- Không bọc tất cả từ trong keyword, CHỈ NHỮNG từ thật sự QUAN TRỌNG hoặc buzzwords
+- Ngôn ngữ súc tích, KHÔNG RƯỜM RÀ
+- Hook phải GÂY SỐC, buộc người xem xem tiếp
+- Dùng ít nhất 2-3 loại scene_type khác nhau trong 1 video để video sinh động
+- Không bọc tất cả từ trong keyword, CHỈ NHỮNG từ thật sự QUAN TRỌNG
 `.trim();
 
 export async function generateScript(
@@ -173,14 +218,33 @@ export async function generateScript(
       const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
       const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
       
-      // Normalize to VideoScript format
+      // Normalize to VideoScript format — forward all scene_type fields
       script = {
         title: parsed.title || article.title.slice(0, 60),
         hook: parsed.hook || parsed.title || "",
         scenes: (parsed.scenes || []).map((s: Record<string, unknown>) => ({
-          narration: s.narration || s.text || s.content || "",
+          narration: String(s.narration || s.text || s.content || ""),
           duration: Number(s.duration) || 6,
           visual_id: s.visual_id || VISUAL_IDS[Math.floor(Math.random() * VISUAL_IDS.length)],
+          scene_type: s.scene_type || "normal",
+          // counter fields
+          counter_end: s.counter_end !== undefined ? Number(s.counter_end) : undefined,
+          counter_label: s.counter_label ? String(s.counter_label) : undefined,
+          counter_suffix: s.counter_suffix !== undefined ? String(s.counter_suffix) : undefined,
+          counter_prefix: s.counter_prefix ? String(s.counter_prefix) : undefined,
+          // vs_screen fields
+          vs_left: s.vs_left ? String(s.vs_left) : undefined,
+          vs_right: s.vs_right ? String(s.vs_right) : undefined,
+          vs_left_color: s.vs_left_color ? String(s.vs_left_color) : undefined,
+          vs_right_color: s.vs_right_color ? String(s.vs_right_color) : undefined,
+          // terminal fields
+          terminal_title: s.terminal_title ? String(s.terminal_title) : undefined,
+          terminal_lines: Array.isArray(s.terminal_lines) ? s.terminal_lines.map(String) : undefined,
+          // checklist fields
+          checklist_items: Array.isArray(s.checklist_items) ? s.checklist_items.map(String) : undefined,
+          // progress_bar fields
+          progress_target: s.progress_target !== undefined ? Number(s.progress_target) : undefined,
+          progress_label: s.progress_label ? String(s.progress_label) : undefined,
         })),
         callToAction: parsed.callToAction || parsed.cta || "Theo dõi kênh để không bỏ lỡ!",
       };

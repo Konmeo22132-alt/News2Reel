@@ -418,3 +418,285 @@ export async function saveASSFile(content: string, outputPath: string): Promise<
   const fs = await import("fs");
   fs.writeFileSync(outputPath, content, "utf-8");
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SPECIAL SCENE FILTER GENERATORS
+// Each returns a string of FFmpeg filter chain commands that transform [base]
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Counter Scene: Giant glowing number counting up from 0 → end.
+ * Used for stats like "22 lỗ hổng", "40%", "2026"
+ *
+ * FFmpeg expression: min(t/0.5, 1) * end gives a 0→end ramp over 0.5s
+ */
+export function buildCounterFilter(opts: {
+  inputLabel: string;
+  outputLabel: string;
+  end: number;
+  label?: string;
+  prefix?: string;
+  suffix?: string;
+  width: number;
+  height: number;
+}): string {
+  const { inputLabel, outputLabel, end, label = "", prefix = "", suffix = "", width, height } = opts;
+  const cx = Math.floor(width / 2);
+  const cy = Math.floor(height / 2) - 40;
+
+  // Counter expression: ramps from 0→end over first 0.6s
+  const countExpr = `%{expr_int_format\\:min(t/0.6\\,1)*${end}\\:d\\:0}`;
+  const fullText = `${prefix}${countExpr}${suffix}`;
+
+  let f = `[${inputLabel}]drawtext=text='${fullText}'`;
+  f += `:x=(w-text_w)/2:y=${cy - 60}`;
+  f += `:fontsize=200`;
+  f += `:fontcolor=0xFF3333`;
+  f += `:box=1:boxcolor=0x00000000:boxborderw=0`;
+  f += `:fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf`;
+  f += `:line_spacing=0`;
+
+  if (label) {
+    f += `[cnt_num]; [cnt_num]drawtext=text='${escapeDrawtext(label)}'`;
+    f += `:x=(w-text_w)/2:y=${cy + 100}`;
+    f += `:fontsize=52:fontcolor=0xFFFFFF@0.85`;
+    f += `[${outputLabel}]`;
+  } else {
+    f += `[${outputLabel}]`;
+  }
+
+  return f;
+}
+
+/**
+ * VS Screen: Two colored boxes side by side with "VS" badge.
+ * Used for comparisons like "Human Response vs AI Speed"
+ */
+export function buildVSScreenFilter(opts: {
+  inputLabel: string;
+  outputLabel: string;
+  leftText: string;
+  rightText: string;
+  leftColor?: string;   // hex without # e.g. "8B0000"
+  rightColor?: string;  // hex without # e.g. "003B1E"
+  width: number;
+  height: number;
+}): string {
+  const {
+    inputLabel, outputLabel,
+    leftText, rightText,
+    leftColor = "6B0000",
+    rightColor = "003B1E",
+    width, height,
+  } = opts;
+
+  const margin = 40;
+  const boxW = Math.floor((width - margin * 3) / 2);
+  const boxH = 130;
+  const boxY = Math.floor(height / 2) - 65;
+  const leftX = margin;
+  const rightX = margin * 2 + boxW;
+  const vsX = Math.floor(width / 2);
+  const textY = boxY + Math.floor(boxH / 2) - 26;
+
+  const lc = leftColor.replace("#", "");
+  const rc = rightColor.replace("#", "");
+
+  let f = `[${inputLabel}]`;
+  f += `drawbox=x=${leftX}:y=${boxY}:w=${boxW}:h=${boxH}:color=0x${lc}CC:t=fill`;
+  f += `[vs_lb]; [vs_lb]`;
+  f += `drawbox=x=${rightX}:y=${boxY}:w=${boxW}:h=${boxH}:color=0x${rc}CC:t=fill`;
+  f += `[vs_rb]; [vs_rb]`;
+  f += `drawtext=text='${escapeDrawtext(leftText)}':x=${leftX + 20}:y=${textY}:fontsize=44:fontcolor=0xFF6666`;
+  f += `[vs_lt]; [vs_lt]`;
+  f += `drawtext=text='${escapeDrawtext(rightText)}':x=${rightX + 20}:y=${textY}:fontsize=44:fontcolor=0x66FF99`;
+  f += `[vs_rt]; [vs_rt]`;
+  f += `drawtext=text='VS':x=${vsX - 20}:y=${textY + 6}:fontsize=48:fontcolor=0xFFFFFF`;
+  f += `[${outputLabel}]`;
+
+  return f;
+}
+
+/**
+ * Terminal Scene: Mac-style terminal window with typewriter text.
+ * Red/Yellow/Green traffic light dots + monospace command lines.
+ */
+export function buildTerminalFilter(opts: {
+  inputLabel: string;
+  outputLabel: string;
+  lines: string[];         // e.g. ["> exploit --target CVE-2026-2796", "// Success..."]
+  title?: string;
+  width: number;
+  height: number;
+}): string {
+  const { inputLabel, outputLabel, lines, title = "", width, height } = opts;
+
+  const panelW = width - 80;
+  const panelH = Math.min(80 + lines.length * 55, 380);
+  const panelX = 40;
+  const panelY = Math.floor(height / 2) - Math.floor(panelH / 2);
+
+  // Bar height + dots
+  const barH = 44;
+  const dotY = panelY + 14;
+  const dot1X = panelX + 18;
+  const dot2X = panelX + 46;
+  const dot3X = panelX + 74;
+  const dotR = 12;
+
+  let f = `[${inputLabel}]`;
+
+  // Window box
+  f += `drawbox=x=${panelX}:y=${panelY}:w=${panelW}:h=${panelH}:color=0x1A1A1AEE:t=fill`;
+  f += `[term_bg]; [term_bg]`;
+
+  // Title bar
+  f += `drawbox=x=${panelX}:y=${panelY}:w=${panelW}:h=${barH}:color=0x2D2D2DEE:t=fill`;
+  f += `[term_bar]; [term_bar]`;
+
+  // Traffic lights
+  f += `drawbox=x=${dot1X}:y=${dotY}:w=${dotR * 2}:h=${dotR * 2}:color=0xFF5F56:t=fill`;
+  f += `[d1]; [d1]`;
+  f += `drawbox=x=${dot2X}:y=${dotY}:w=${dotR * 2}:h=${dotR * 2}:color=0xFFBD2E:t=fill`;
+  f += `[d2]; [d2]`;
+  f += `drawbox=x=${dot3X}:y=${dotY}:w=${dotR * 2}:h=${dotR * 2}:color=0x28CA41:t=fill`;
+  f += `[d3]; [d3]`;
+
+  // Optional title in bar
+  if (title) {
+    f += `drawtext=text='${escapeDrawtext(title.slice(0, 40))}':x=${panelX + 110}:y=${panelY + 12}:fontsize=28:fontcolor=0xCCCCCC`;
+    f += `[term_title]; [term_title]`;
+  }
+
+  // Command lines (typewriter: each appears after delay)
+  const lineStartY = panelY + barH + 18;
+  for (let i = 0; i < lines.length; i++) {
+    const lineY = lineStartY + i * 55;
+    const enableTime = (i * 1.2).toFixed(1); // 0s, 1.2s, 2.4s...
+    const lineText = escapeDrawtext(lines[i].slice(0, 55));
+    const color = lines[i].startsWith(">") ? "0x00FF88" : "0xCCCCCC";
+
+    f += `drawtext=text='${lineText}':x=${panelX + 18}:y=${lineY}`;
+    f += `:fontsize=32:fontcolor=${color}`;
+    f += `:enable='gte(t,${enableTime})'`;
+
+    if (i < lines.length - 1) {
+      f += `[term_l${i}]; [term_l${i}]`;
+    } else {
+      f += `[${outputLabel}]`;
+    }
+  }
+
+  // Edge case: no lines
+  if (lines.length === 0) {
+    f = f.replace(`[d3]; [d3]`, `[d3]; [d3]drawtext=text=''[${outputLabel}]`);
+  }
+
+  return f;
+}
+
+/**
+ * Checklist Scene: Staggered ✓ lines appearing one by one.
+ * Used for summaries and CTA at end of video.
+ */
+export function buildChecklistFilter(opts: {
+  inputLabel: string;
+  outputLabel: string;
+  items: string[];
+  width: number;
+  height: number;
+}): string {
+  const { inputLabel, outputLabel, items, height } = opts;
+
+  const startY = Math.floor(height / 2) - Math.floor(items.length * 80 / 2);
+  const lineH = 80;
+  const textX = 120;
+  const checkX = 60;
+
+  let f = `[${inputLabel}]`;
+
+  for (let i = 0; i < items.length; i++) {
+    const y = startY + i * lineH;
+    const delay = (i * 0.7).toFixed(1);
+    const text = escapeDrawtext(items[i].slice(0, 40));
+
+    // Checkmark
+    f += `drawtext=text='✓':x=${checkX}:y=${y}:fontsize=56:fontcolor=0x00FF88:enable='gte(t,${delay})'`;
+    f += `[cl_c${i}]; [cl_c${i}]`;
+
+    // Item text
+    f += `drawtext=text='${text}':x=${textX}:y=${y + 4}:fontsize=52:fontcolor=0xFFFFFF:enable='gte(t,${delay})'`;
+
+    if (i < items.length - 1) {
+      f += `[cl_t${i}]; [cl_t${i}]`;
+    } else {
+      f += `[${outputLabel}]`;
+    }
+  }
+
+  // Edge: empty list
+  if (items.length === 0) {
+    f = `[${inputLabel}]drawtext=text=''[${outputLabel}]`;
+  }
+
+  return f;
+}
+
+/**
+ * Progress Bar Scene: Animated horizontal bar filling from 0 → target%.
+ * Used for market share stats.
+ */
+export function buildProgressBarFilter(opts: {
+  inputLabel: string;
+  outputLabel: string;
+  target: number;     // 0-100
+  label?: string;
+  width: number;
+  height: number;
+}): string {
+  const { inputLabel, outputLabel, target, label = "", width, height } = opts;
+
+  const barW = width - 120;
+  const barH = 56;
+  const barX = 60;
+  const barY = Math.floor(height / 2) - barH / 2 + 40;
+  const labelY = barY - 70;
+  const pctY = barY + barH + 20;
+  const targetFraction = Math.min(target, 100) / 100;
+
+  // Animated fill: ramps to targetFraction over 1.0s
+  const fillExpr = `trunc(min(t/1.0\\,1)*${targetFraction}*${barW})`;
+
+  let f = `[${inputLabel}]`;
+
+  // Background bar (dark grey)
+  f += `drawbox=x=${barX}:y=${barY}:w=${barW}:h=${barH}:color=0x333333:t=fill`;
+  f += `[pb_bg]; [pb_bg]`;
+
+  // Animated fill bar (red accent)
+  f += `drawbox=x=${barX}:y=${barY}:w=${fillExpr}:h=${barH}:color=0xFF3333:t=fill`;
+  f += `[pb_fill]; [pb_fill]`;
+
+  // Label text
+  if (label) {
+    f += `drawtext=text='${escapeDrawtext(label)}':x=(w-text_w)/2:y=${labelY}:fontsize=48:fontcolor=0xFFFFFF`;
+    f += `[pb_lbl]; [pb_lbl]`;
+  }
+
+  // Percentage counter
+  const pctExpr = `%{expr_int_format\\:min(t/1.0\\,1)*${target}\\:d\\:0}%`;
+  f += `drawtext=text='${pctExpr}':x=(w-text_w)/2:y=${pctY}:fontsize=72:fontcolor=0xFF5555`;
+  f += `[${outputLabel}]`;
+
+  return f;
+}
+
+/** Escape special chars for FFmpeg drawtext */
+function escapeDrawtext(text: string): string {
+  return text
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\u2019")   // Replace straight quote with curly to avoid shell issues
+    .replace(/:/g, "\\:")
+    .replace(/\[/g, "\\[")
+    .replace(/\]/g, "\\]");
+}
