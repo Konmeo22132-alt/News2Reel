@@ -139,7 +139,8 @@ async function renderScene(opts: {
   const visual = getVisualConfig(visualId, width, height);
   const iconPath = visual?.iconPath ?? null;
   const hasIcon = !!iconPath && fs.existsSync(iconPath);
-  const hasTerminal = visual?.hasTerminal ?? false;
+  // Note: hasTerminal is no longer needed — terminal window is rendered by
+  // buildTerminalFilter() in vfx-builder.ts when scene_type === 'terminal'
 
   // ── Build filter_complex ──
   // Input numbering:
@@ -172,26 +173,18 @@ async function renderScene(opts: {
     filterComplex += `[bg][icon]overlay=x=${baseX}:y='${baseY}+floor(15*sin(2*PI*t))':eval=frame[with_icon]; `;
   }
 
-  // ── Layer 2.5: Terminal box (drawbox) ──
-  if (hasTerminal) {
-    const boxColor = visualId === "terminal" ? "0x00FF00" : "0x00FFFF";
-    const boxW = 560, boxH = 180;
-    const boxX = Math.floor((width - boxW) / 2);
-    const boxY = Math.floor(height / 2);
-    filterComplex += `[bg]drawbox=x=${boxX}:y=${boxY}:w=${boxW}:h=${boxH}:color=${boxColor}:width=2:radius=8:t=fill[with_box]; `;
-  }
 
   // ── Layer 3: Scene counter + scene number text ──
   const isMiddleScene = !isHook && !isCTA;
   if (isMiddleScene) {
     const counterText = `${sceneIndex}/${totalScenes - 2}`;
-    const counterFilter = `[${hasIcon || hasTerminal ? (hasIcon ? "with_icon" : "with_box") : "bg"}]` +
+    const counterFilter = `[${hasIcon ? "with_icon" : "bg"}]` +
       `drawtext=text='${counterText}':fontsize=28:fontcolor=0xffffff@0.35:x=(w-tw)/2:y=80:font=Roboto[base]; `;
     filterComplex += counterFilter;
   }
 
   // ── Layer 4: Scene-type special overlays + ASS subtitle karaoke ──
-  const baseLabel = isMiddleScene ? "base" : (hasIcon ? "with_icon" : hasTerminal ? "with_box" : "bg");
+  const baseLabel = isMiddleScene ? "base" : (hasIcon ? "with_icon" : "bg");
   const assEscaped = assPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\''");
 
   // Try special scene renderer first
