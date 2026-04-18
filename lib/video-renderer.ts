@@ -167,7 +167,7 @@ async function renderScene(opts: {
 
     filterComplex += `${kenBurns}[kb_img]; `;
     filterComplex += `[bg][kb_img]overlay=x=0:y=0:eval=init[bg_img]; `;
-    filterComplex += `[bg_img]vignette=angle=PI/4:mode=progressive[bg_vign]; `;
+    filterComplex += `[bg_img]vignette=angle=PI/4[bg_vign]; `;
     afterImageLabel = "bg_vign";
   }
 
