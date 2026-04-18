@@ -173,7 +173,7 @@ async function renderScene(opts: {
 
     // Use trim/setpts to handle pop-in timing per scene
     filterComplex += `[2:v]${popIn}[icon]; `;
-    filterComplex += `[bg][icon]${floating}[with_icon]; `;
+    filterComplex += `[bg][icon]overlay=x=${baseX}:y='${baseY}+floor(15*sin(2*PI*t))':eval=frame[with_icon]; `;
   }
 
   // ── Layer 2.5: Terminal box (drawbox) ──
@@ -195,9 +195,10 @@ async function renderScene(opts: {
   }
 
   // ── Layer 4: ASS subtitles (bouncing karaoke) ──
+  // Wrap path in single quotes to handle spaces. Escape : and ' chars.
   const baseLabel = isMiddleScene ? "base" : (hasIcon ? "with_icon" : hasTerminal ? "with_box" : "bg");
-  const assEscaped = assPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "\\'");
-  filterComplex += `[${baseLabel}]ass=${assEscaped}[out]`;
+  const assEscaped = assPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\''");
+  filterComplex += `[${baseLabel}]ass='${assEscaped}'[out]`;
 
   return new Promise<void>((resolve, reject) => {
     const cmd = ffmpeg();
@@ -349,7 +350,10 @@ export async function renderVideo(
       onProgress?.(ttsPercent, `TTS cảnh ${i + 1}/${allScenes.length}`);
       console.log(`[Renderer] Scene ${i + 1}/${allScenes.length} | Visual: ${scene.visualId} | ${scene.narration.slice(0, 40)}...`);
 
-      await textToSpeech(scene.narration, mp3Path, {
+      // Strip <keyword> tags from narration before TTS (tags are for visuals only, not voice)
+      const ttsNarration = scene.narration.replace(/<\/?keyword>/gi, "");
+
+      await textToSpeech(ttsNarration, mp3Path, {
         voice: "vi-VN-NamMinhNeural",
         rate: "+20%",
       });
