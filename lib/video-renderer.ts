@@ -184,7 +184,7 @@ async function renderScene(opts: {
     const easeOutStr = `${anim}*(2-${anim})`;
     const yExpr = `${startY} - ${easeOutStr}*(${startY} - (${endY}))`;
     const alphaExpr = `min(t*1.5,1)`;
-    filterComplex += `[social_raw]colorchannelmixer=aa=${alphaExpr}[social_faded]; `;
+    filterComplex += `[social_raw]colorchannelmixer=aa='${alphaExpr}'[social_faded]; `;
     filterComplex += `[${beforeAssLabel}][social_faded]overlay=x=(W-w)/2:y='${yExpr}':eval=frame[with_social]; `;
     beforeAssLabel = "with_social";
   }

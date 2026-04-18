@@ -82,11 +82,13 @@ autovideo-admin/
 │   ├── models/
 │   │   ├── AppConfig.ts        # Mongoose model — singleton config doc (collection: app_config)
 │   │   └── VideoJob.ts         # Mongoose model — video jobs (collection: video_jobs), indexed: createdAt, status, jobId
-│   ├── ai.ts                   # DeepSeek API caller: article → VideoScript JSON
-│   ├── scraper.ts              # HTML scraper: URL → {title, content} (cheerio, AMP fallback)
-│   ├── tts.ts                  # Google TTS: text → MP3 (chunked at 180 chars)
-│   ├── video-renderer.ts       # FFmpeg: VideoScript → 9:16 MP4 (5-Layer Retention Architecture)
-│   ├── vfx-subtitle.ts         # ASS subtitle generator + gradient filters (bouncing karaoke, animated gradient)
+│   ├── ai.ts                   # AI Script generator: article → VideoScript JSON (pure storytelling narrative)
+│   ├── scraper.ts              # HTML scraper: URL → {title, content, images}
+│   ├── tts.ts                  # TTS Engine: text → MP3
+│   ├── social-card-generator.ts# HTML/Tailwind generator for Twitter Cards and VNExpress Comments
+│   ├── playwright-screenshot.ts# Headless Chromium engine converting HTML UI to transparent PNGs
+│   ├── video-renderer.ts       # FFmpeg Orchestrator: Ken Burns Article Image + Playwright Overlays + Subtitles
+│   ├── vfx-subtitle.ts         # ASS subtitle generator + animated gradient background filter
 │   ├── tiktok.ts               # TikTok Content Posting API: init upload → PUT file → poll status
 │   └── job-processor.ts        # Pipeline orchestrator: scrape → AI → render → tiktok(optional)
 ├── middleware.ts               # Auth guard: redirect to /login if no valid admin_token cookie
