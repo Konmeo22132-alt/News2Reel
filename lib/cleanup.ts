@@ -4,11 +4,11 @@ import path from "path";
 const OUTPUT_DIR = path.join(process.cwd(), "public", "videos");
 const TMP_DIR = path.join(process.cwd(), ".tmp");
 
-const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
+const THIRTY_MINUTES_MS = 30 * 60 * 1000;
 
 /**
  * Sweeps through the output videos directory and internal temporary 
- * directory, safely unlinking any file or folder older than 3 hours.
+ * directory, safely unlinking any file or folder older than 30 mins.
  */
 export function cleanupStaleFiles() {
   const now = Date.now();
@@ -21,7 +21,7 @@ export function cleanupStaleFiles() {
         if (!file.endsWith(".mp4")) continue;
         const filePath = path.join(OUTPUT_DIR, file);
         const stats = fs.statSync(filePath);
-        if (now - stats.mtimeMs > THREE_HOURS_MS) {
+        if (now - stats.mtimeMs > THIRTY_MINUTES_MS) {
           try {
             fs.unlinkSync(filePath);
             console.log(`[Cleanup] Deleted stale video: ${file}`);
@@ -38,7 +38,7 @@ export function cleanupStaleFiles() {
       for (const dir of dirs) {
         const dirPath = path.join(TMP_DIR, dir);
         const stats = fs.statSync(dirPath);
-        if (now - stats.mtimeMs > THREE_HOURS_MS) {
+        if (now - stats.mtimeMs > THIRTY_MINUTES_MS) {
           try {
             fs.rmSync(dirPath, { recursive: true, force: true });
             console.log(`[Cleanup] Deleted stale temp dir: ${dir}`);
