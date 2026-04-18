@@ -41,8 +41,8 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
     }
 
     const jobId = state.jobId;
-    let attempts = 0;
-    const MAX_ATTEMPTS = 300; // 15 minutes at 3s intervals
+    let attempts = 0; // tracked only for logging, no hard limit
+    const _ = attempts; // suppress unused warning
 
     const poll = async () => {
       attempts++;
@@ -67,17 +67,14 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
           setStatusText("Đang chờ xử lý...");
         }
 
-        if (attempts >= MAX_ATTEMPTS) {
-          clearInterval(pollRef.current!);
-          setState({ phase: "error", message: "Timeout: Pipeline mất quá thời gian" });
-        }
+        // No timeout — wait for server to mark job as 'failed' if something goes wrong
       } catch {
         // Network error — keep polling
       }
     };
 
     poll(); // run immediately
-    pollRef.current = setInterval(poll, 3000); // 3s polling for real-time feel
+    pollRef.current = setInterval(poll, 4000); // 4s polling — generous for complex scenes
 
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [state.phase, state.phase === "polling" ? state.jobId : null]); // depend strictly on phase/id to not reset interval
