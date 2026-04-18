@@ -19,6 +19,10 @@ try {
     
     const output = execSync(cmd, { stdio: 'pipe' });
     console.log("Success!");
-} catch(e) {
-    console.error("Failed:", e.stderr ? e.stderr.toString() : e);
+} catch(e: unknown) {
+    if (e instanceof Error && 'stderr' in e) {
+        console.error("Failed:", (e as any).stderr.toString());
+    } else {
+        console.error("Failed:", e);
+    }
 }

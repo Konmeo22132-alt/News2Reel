@@ -7,8 +7,9 @@ try {
     console.log("Running exactly:", cmd);
     const output = execSync(cmd, { stdio: 'pipe' });
     console.log("Success!");
-} catch(e) {
+} catch(e: unknown) {
     console.error("FFMPEG FAILED!");
-    console.error("STDOUT:", e.stdout?.toString());
-    console.error("STDERR:", e.stderr?.toString());
+    const err = e as { stdout?: Buffer; stderr?: Buffer };
+    console.error("STDOUT:", err.stdout?.toString());
+    console.error("STDERR:", err.stderr?.toString());
 }

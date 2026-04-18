@@ -16,18 +16,25 @@ async function main() {
         url: url
     };
     
-    console.log(`[2] Generating AI Script from: ${article.title} ...`);
-    const script = await generateScript(article, "tech", "Nhấn mạnh từ khoá quân sự.");
+    const script = await generateScript(article, {
+        apiKey: process.env.AI_API_KEY || "",
+        channelGoal: "tech",
+        customPrompt: "Nhấn mạnh từ khoá quân sự."
+    });
     
     console.log("[AI Script Result]:", JSON.stringify(script, null, 2));
 
     console.log("[3] Rendering Video ...");
     const jobId = `test_pipe_${Date.now()}`;
-    const outputUrl = await renderVideo(script, jobId);
+    const outputUrl = await renderVideo(script, "720p", jobId);
     
     console.log(`[SUCCESS] Full pipeline completed. Video at: ${outputUrl}`);
-  } catch (error) {
-    console.error("[CRITICAL ERROR] Pipeline failed:", error);
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+        console.error("[CRITICAL ERROR] Pipeline failed:", error.message);
+    } else {
+        console.error("[CRITICAL ERROR] Pipeline failed:", error);
+    }
   }
 }
 

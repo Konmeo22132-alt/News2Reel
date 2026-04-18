@@ -430,18 +430,20 @@ export async function renderTestScene(
     const iconPath = path.join(ASSETS_DIR, `${visualId}.png`);
     const hasIcon = fs.existsSync(iconPath);
 
-    const gradFilter = generateAnimatedGradientFilter(width, height, "#0d0d0d", "#2c0000", duration + 0.5);
+    // Input 0: Background (Color)
+    // Input 1: Audio
+    // Input 2: Icon (if exists)
+    // Input 3: BGM (if exists)
 
-    let filterComplex = `[0:v]${gradFilter}[bg]; `;
+    const escapedAssPath = assPath.replace(/\\/g, "/").replace(/:/g, "\\:");
+    let filterComplex = `[0:v]geq=r='15+15*sin(T)':g='10+5*sin(T)':b='15+10*sin(T)',vignette=PI/4[grad]; `;
 
     if (hasIcon) {
-      const baseX = Math.floor(width / 2 - 140);
-      const baseY = Math.floor(height / 3);
-      filterComplex += `[2:v]scale=280:-1[icon]; `;
-      filterComplex += `[bg][icon]overlay=${baseX}:${baseY}+floor(15*sin(2*PI*t)):format=auto[with_icon]; `;
-      filterComplex += `[with_icon]ass='${assPath.replace(/\\/g, "/").replace(/:/g, "\\:")}'[out]`;
+      filterComplex += `[2:v]scale=300:-1[icon_scaled]; `;
+      filterComplex += `[grad][icon_scaled]overlay=x='(W-w)/2':y='H/3 + 30*sin(t*3)':eval=frame[with_icon]; `;
+      filterComplex += `[with_icon]ass='${escapedAssPath}'[out]`;
     } else {
-      filterComplex += `[bg]ass='${assPath.replace(/\\/g, "/").replace(/:/g, "\\:")}'[out]`;
+      filterComplex += `[grad]ass='${escapedAssPath}'[out]`;
     }
 
     return new Promise<string>((resolve, reject) => {

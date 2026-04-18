@@ -17,7 +17,6 @@ import { updateConfig, type ConfigFormData } from "@/app/actions/config";
 // Inline type mirroring Prisma AppConfig model (avoids @prisma/client export mismatch)
 type AppConfig = {
   id: number;
-  deepseekApiKey: string | null;
   aiProvider: string;
   aiApiKey: string | null;
   aiModel: string | null;
