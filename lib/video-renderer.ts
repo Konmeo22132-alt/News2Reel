@@ -183,8 +183,7 @@ async function renderScene(opts: {
     const anim = `min(t,0.8)/0.8`;
     const easeOutStr = `${anim}*(2-${anim})`;
     const yExpr = `${startY} - ${easeOutStr}*(${startY} - (${endY}))`;
-    const alphaExpr = `min(t*1.5,1)`;
-    filterComplex += `[social_raw]colorchannelmixer=aa='${alphaExpr}'[social_faded]; `;
+    filterComplex += `[social_raw]fade=t=in:st=0:d=0.66:alpha=1[social_faded]; `;
     filterComplex += `[${beforeAssLabel}][social_faded]overlay=x=(W-w)/2:y='${yExpr}':eval=frame[with_social]; `;
     beforeAssLabel = "with_social";
   }
