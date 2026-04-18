@@ -139,10 +139,15 @@ function generateStyleSection(style: ASSStyle): string {
   //         OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut,
   //         ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow,
   //         Alignment, MarginL, MarginR, MarginV, Encoding
+  // IMPORTANT: ASS `BackColour` format is &HAABBGGRR (alpha, blue, green, red)
+  // BorderStyle=4 = opaque box behind text (CapCut-style word highlight)
+  //
+  // Default: dark semi-transparent box (readable background for all words)
+  // Keyword: hot pink/red box (&H99FF0055) to highlight spoken keyword
   return `[V4+ Styles]
 Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
-Style: Default,${style.font},${style.fontSize},${style.primaryColor},${style.outlineColor},${style.shadowColor},&H80000000,${style.bold ? -1 : 0},0,0,0,100,100,0,0,4,0,0,${style.alignment},10,10,30,1
-Style: Keyword,${style.font},${style.fontSize + 10},${ASS_COLORS.yellow},${style.outlineColor},${style.shadowColor},&H80000000,-1,0,0,0,100,100,0,0,4,0,0,${style.alignment},10,10,30,1
+Style: Default,${style.font},${style.fontSize},${style.primaryColor},${style.outlineColor},${style.shadowColor},&H88000000,${style.bold ? -1 : 0},0,0,0,100,100,2,0,4,0,4,${style.alignment},10,10,30,1
+Style: Keyword,${style.font},${style.fontSize + 8},&H00FFFFFF,${style.outlineColor},${style.shadowColor},&H99FF0055,-1,0,0,0,100,100,2,0,4,0,3,${style.alignment},10,10,30,1
 
 `;
 }

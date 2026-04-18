@@ -29,16 +29,11 @@ import { textToSpeech, getAudioDuration, tempMp3Path } from "./tts";
 import {
   generateWordByWordASS,
   generateAnimatedGradientFilter,
-  generateTerminalBox,
   ASS_COLORS,
   DEFAULT_ASS_STYLE,
   saveASSFile,
-  buildCounterFilter,
-  buildVSScreenFilter,
-  buildTerminalFilter,
-  buildChecklistFilter,
-  buildProgressBarFilter,
 } from "./vfx-subtitle";
+import { buildSceneFilter } from "./vfx-builder";
 
 type FfmpegStatic = typeof import("fluent-ffmpeg");
 
@@ -95,11 +90,7 @@ function getVisualConfig(visualId: string, width: number, height: number): {
   }
 
   if (visualId === "terminal" || visualId === "code_window") {
-    return {
-      iconPath: null,
-      drawboxFilter: generateTerminalBox(width, height, 0, 0, visualId),
-      hasTerminal: true,
-    };
+    return { iconPath: null, drawboxFilter: null, hasTerminal: true };
   }
 
   return null;
@@ -199,87 +190,25 @@ async function renderScene(opts: {
     filterComplex += counterFilter;
   }
 
-  // ── Layer 4: Scene-type special overlays + ASS subtitles ──
+  // ── Layer 4: Scene-type special overlays + ASS subtitle karaoke ──
   const baseLabel = isMiddleScene ? "base" : (hasIcon ? "with_icon" : hasTerminal ? "with_box" : "bg");
-  const sceneType = (opts as any).scene_type || "normal";
+  const assEscaped = assPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\''");
 
-  if (sceneType === "counter" && (opts as any).counter_end != null) {
-    const s = opts as any;
-    filterComplex += buildCounterFilter({
-      inputLabel: baseLabel,
-      outputLabel: "special_out",
-      end: s.counter_end,
-      label: s.counter_label,
-      prefix: s.counter_prefix || "",
-      suffix: s.counter_suffix != null ? s.counter_suffix : "",
-      width,
-      height,
-    });
-    filterComplex += "; ";
-    const assEscaped = assPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\''");
+  // Try special scene renderer first
+  const specialFilter = buildSceneFilter(
+    opts as unknown as Record<string, unknown>,
+    baseLabel,
+    "special_out",
+    width,
+    height,
+    videoDuration
+  );
+
+  if (specialFilter) {
+    filterComplex += specialFilter + "; ";
     filterComplex += `[special_out]ass='${assEscaped}'[out]`;
-
-  } else if (sceneType === "vs_screen" && (opts as any).vs_left) {
-    const s = opts as any;
-    filterComplex += buildVSScreenFilter({
-      inputLabel: baseLabel,
-      outputLabel: "special_out",
-      leftText: s.vs_left,
-      rightText: s.vs_right || "",
-      leftColor: s.vs_left_color || "6B0000",
-      rightColor: s.vs_right_color || "003B1E",
-      width,
-      height,
-    });
-    filterComplex += "; ";
-    const assEscaped = assPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\''");
-    filterComplex += `[special_out]ass='${assEscaped}'[out]`;
-
-  } else if (sceneType === "terminal" && (opts as any).terminal_lines?.length) {
-    const s = opts as any;
-    filterComplex += buildTerminalFilter({
-      inputLabel: baseLabel,
-      outputLabel: "special_out",
-      lines: s.terminal_lines,
-      title: s.terminal_title || "",
-      width,
-      height,
-    });
-    filterComplex += "; ";
-    const assEscaped = assPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\''");
-    filterComplex += `[special_out]ass='${assEscaped}'[out]`;
-
-  } else if (sceneType === "checklist" && (opts as any).checklist_items?.length) {
-    const s = opts as any;
-    filterComplex += buildChecklistFilter({
-      inputLabel: baseLabel,
-      outputLabel: "special_out",
-      items: s.checklist_items,
-      width,
-      height,
-    });
-    filterComplex += "; ";
-    const assEscaped = assPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\''");
-    filterComplex += `[special_out]ass='${assEscaped}'[out]`;
-
-  } else if (sceneType === "progress_bar" && (opts as any).progress_target != null) {
-    const s = opts as any;
-    filterComplex += buildProgressBarFilter({
-      inputLabel: baseLabel,
-      outputLabel: "special_out",
-      target: s.progress_target,
-      label: s.progress_label || "",
-      width,
-      height,
-    });
-    filterComplex += "; ";
-    const assEscaped = assPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\''");
-    filterComplex += `[special_out]ass='${assEscaped}'[out]`;
-
   } else {
-    // Default: "normal" scene — just ASS subtitles with bouncing karaoke
-    // Wrap path in single quotes to handle spaces. Escape : and ' chars.
-    const assEscaped = assPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\''");
+    // Default: normal scene — gradient + icon + karaoke subtitle only
     filterComplex += `[${baseLabel}]ass='${assEscaped}'[out]`;
   }
 
