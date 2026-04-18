@@ -31,6 +31,7 @@ export type ConfigFormData = {
   tiktokApiSecret?: string;
   autoPostEnabled?: boolean;
   customPrompt?: string;
+  ClaudeApiKey?: string;
 };
 
 export async function updateConfig(
@@ -53,6 +54,7 @@ export async function updateConfig(
           ...(data.tiktokApiSecret !== undefined && { tiktokApiSecret: data.tiktokApiSecret || null }),
           ...(data.autoPostEnabled !== undefined && { autoPostEnabled: data.autoPostEnabled }),
           ...(data.customPrompt !== undefined && { customPrompt: data.customPrompt || null }),
+          ...(data.ClaudeApiKey !== undefined && { ClaudeApiKey: data.ClaudeApiKey || null }),
         },
       },
       { upsert: true, returnDocument: "after" }
