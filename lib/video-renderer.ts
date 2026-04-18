@@ -178,18 +178,13 @@ async function renderScene(opts: {
   }
 
 
-  // ── Layer 3: Scene counter + scene number text ──
+  // ── Layer 3 removed: Scene counter (1/8, 2/8...) was a debug artifact ──
+  // Viewers don't need pagination — it breaks immersion. Deleted permanently.
   const isMiddleScene = !isHook && !isCTA;
   const iconRendered = hasIcon && !skipIcon;
-  if (isMiddleScene) {
-    const counterText = `${sceneIndex}/${totalScenes - 2}`;
-    const counterFilter = `[${iconRendered ? "with_icon" : "bg"}]` +
-      `drawtext=text='${counterText}':fontsize=28:fontcolor=0xffffff@0.35:x=(w-tw)/2:y=80:font=Roboto[base]; `;
-    filterComplex += counterFilter;
-  }
 
   // ── Layer 4: Scene-type special overlays + ASS subtitle karaoke ──
-  const baseLabel = isMiddleScene ? "base" : (iconRendered ? "with_icon" : "bg");
+  const baseLabel = iconRendered ? "with_icon" : "bg";
   const assEscaped = assPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\''");
 
   // Try special scene renderer first
