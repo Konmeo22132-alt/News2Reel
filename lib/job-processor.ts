@@ -3,6 +3,7 @@
  * Pipeline: Scrape → AI Script → Render Video → [TikTok Post]
  */
 
+import { cleanupStaleFiles } from "./cleanup";
 import { connectDB } from "./mongodb";
 import { VideoJobModel } from "./models/VideoJob";
 import { scrapeArticle } from "./scraper";
@@ -49,6 +50,9 @@ export async function processVideoJob(
   config: AppConfig,
   log: (msg: string) => void = console.log
 ): Promise<void> {
+  // Fire-and-forget stale cleanup to save VPS memory
+  Promise.resolve().then(() => cleanupStaleFiles());
+
   try {
     if (!config.aiApiKey && !config.ClaudeApiKey) {
       throw new Error("Chưa cấu hình API Key trong Settings");
