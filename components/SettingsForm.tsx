@@ -85,9 +85,9 @@ export default function SettingsForm({ config }: { config: AppConfig }) {
 
   // Form state
   const [aiProvider, setAiProvider] = useState(config.aiProvider ?? "beeknoee");
-  const [aiApiKey, setAiApiKey]     = useState(config.aiApiKey ?? config.deepseekApiKey ?? "");
+  const [aiApiKey, setAiApiKey]     = useState(config.aiApiKey ?? config.ClaudeApiKey ?? "");
   const [aiModel, setAiModel]       = useState(config.aiModel ?? "");
-  const [deepseekApiKey, setDeepseekApiKey] = useState(config.deepseekApiKey ?? ""); // legacy
+  const [ClaudeApiKey, setClaudeApiKey] = useState(config.ClaudeApiKey ?? "");
   const [videoQuality, setVideoQuality] = useState(config.videoQuality);
   const [dailyVideoLimit, setDailyVideoLimit] = useState(String(config.dailyVideoLimit));
   const [newsSources, setNewsSources] = useState(() => {
@@ -120,7 +120,7 @@ export default function SettingsForm({ config }: { config: AppConfig }) {
         aiProvider,
         aiApiKey: aiApiKey || undefined,
         aiModel: aiModel || undefined,
-        deepseekApiKey: aiApiKey || undefined, // keep legacy in sync
+        ClaudeApiKey: aiApiKey || undefined, // keep legacy in sync
         videoQuality,
         dailyVideoLimit: parseInt(dailyVideoLimit, 10) || 10,
         newsSources: JSON.stringify(sources),

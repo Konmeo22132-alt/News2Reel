@@ -48,7 +48,7 @@ export async function processVideoJob(
   log: (msg: string) => void = console.log
 ): Promise<void> {
   try {
-    if (!config.aiApiKey && !config.deepseekApiKey) {
+    if (!config.aiApiKey && !config.ClaudeApiKey) {
       throw new Error("Chưa cấu hình API Key trong Settings");
     }
 
@@ -67,7 +67,7 @@ export async function processVideoJob(
     // ── STEP 2: AI Script ────────────────────────────────────────
     await track(`${config.aiProvider === "groq" ? "Groq" : "Beeknoee"} AI tạo kịch bản...`, "AI viết kịch bản");
     const script = await generateScript(article, {
-      apiKey: config.aiApiKey ?? config.deepseekApiKey ?? "",
+      apiKey: config.aiApiKey ?? config.ClaudeApiKey ?? "",
       channelGoal: config.channelGoal,
       customPrompt: config.customPrompt,
       aiProvider: config.aiProvider,
