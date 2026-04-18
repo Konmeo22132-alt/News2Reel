@@ -109,9 +109,28 @@ async function fetchAmpVersion(url: string): Promise<string | null> {
   return null;
 }
 
-async function extractContent(html: string): Promise<{ title: string; content: string }> {
+async function extractContent(html: string): Promise<{ title: string; content: string; imageUrls: string[] }> {
   const { load } = await import("cheerio");
   const $ = load(html);
+
+  // ── Extract images BEFORE removing noise (need figure/img tags still present) ──
+  const imageUrls: string[] = [];
+
+  // Priority 1: OG/Twitter card image — always high resolution
+  const ogImage = $("meta[property='og:image']").attr("content") ||
+    $("meta[name='twitter:image']").attr("content");
+  if (ogImage && ogImage.startsWith("http")) imageUrls.push(ogImage);
+
+  // Priority 2: article body images (VNExpress, TuoiTre, etc.)
+  $(".fck_detail img, .detail-content img, article img, .article-body img").each((_, el) => {
+    const src = $(el).attr("src") || $(el).attr("data-src") || $(el).attr("data-original") || "";
+    if (src.startsWith("http") && !imageUrls.includes(src)) {
+      const w = parseInt($(el).attr("width") || "999");
+      if (w === 1 || (w > 0 && w < 100)) return; // skip 1px trackers and tiny thumbnails
+      imageUrls.push(src);
+      if (imageUrls.length >= 6) return false; // max 6 images
+    }
+  });
 
   // Remove noise
   $(NOISE_SELECTORS.join(", ")).remove();
@@ -170,13 +189,14 @@ async function extractContent(html: string): Promise<{ title: string; content: s
   return {
     title: cleanText(title).slice(0, 200),
     content: cleanText(content).slice(0, 8000),
+    imageUrls,
   };
 }
 
 export async function scrapeArticle(url: string): Promise<ScrapedArticle> {
   // Try primary fetch
   let html = await fetchHtml(url);
-  let { title, content } = await extractContent(html);
+  let { title, content, imageUrls } = await extractContent(html);
 
   // If content seems empty or too short (JS-rendered site), try AMP fallback
   if (content.length < 250) {
@@ -184,7 +204,7 @@ export async function scrapeArticle(url: string): Promise<ScrapedArticle> {
     if (ampHtml) {
       const ampResult = await extractContent(ampHtml);
       if (ampResult.content.length > content.length) {
-        ({ title, content } = ampResult);
+        ({ title, content, imageUrls } = ampResult);
       }
     }
   }
@@ -196,7 +216,8 @@ export async function scrapeArticle(url: string): Promise<ScrapedArticle> {
     );
   }
 
-  return { title, content, url };
+  console.log(`[Scraper] Extracted ${imageUrls.length} images from article`);
+  return { title, content, url, imageUrls };
 }
 
 /** Pick a random source from JSON array string */

@@ -30,6 +30,7 @@ export type ScrapedArticle = {
   title: string;
   content: string;
   url: string;
+  imageUrls: string[];  // Article images extracted by scraper (OG + content images)
 };
 
 // Visual IDs for scene visuals (matches AI script engine)
@@ -69,8 +70,9 @@ export type VideoScript = {
 export type ScriptScene = {
   narration: string;    // Text to display / narrate (may include <keyword> tags)
   duration: number;     // Seconds
-  visual_id: VisualID;  // Emoji icon for this scene
+  visual_id: VisualID;  // Emoji icon fallback
   scene_type?: SceneType; // Defaults to "normal" if omitted
+  image_index?: number;   // Which article image to use as background (0-based). Optional.
 
   // For scene_type === "counter"
   counter_end?: number;           // e.g. 22, 200

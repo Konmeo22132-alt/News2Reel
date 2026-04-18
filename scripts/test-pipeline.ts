@@ -13,7 +13,8 @@ async function main() {
     const article = {
         title: "Quân đội Mỹ nêu mục tiêu phong tỏa ở eo biển Hormuz",
         content: "Mỹ phong tỏa eo biển Hormuz để ngăn chặn dòng chảy vũ khí đến lực lượng Houthi. Trọng tâm của bộ tư lệnh trung tâm không phải đối đầu quân sự toàn diện.",
-        url: url
+        url: url,
+        imageUrls: [], // no images in mock; real scraper will populate these
     };
     
     const script = await generateScript(article, {
