@@ -278,16 +278,14 @@ export function generateAnimatedGradientFilter(
   const distExpr = `sqrt((W-${cx})*(W-${cx})+(H-${cy})*(H-${cy}))`;
 
   // Animated gradient: base + pulse + edge shift
-  // R channel with breathing pulse
-  const rExpr = `(1-exp(-(${distExpr}/${maxDist})*3))*(${toRGB.r}-${fromRGB.r})+${fromRGB.r}+${pulseAmp}*${fromRGB.r}*sin(t*2*PI/${cycleSlow})`;
+  // geq uses 'T' (uppercase) for time variable
+  const rExpr = `(1-exp(-(${distExpr}/${maxDist})*3))*(${toRGB.r}-${fromRGB.r})+${fromRGB.r}+${pulseAmp}*${fromRGB.r}*sin(T*2*PI/${cycleSlow})`;
 
-  // G channel with slight shift
-  const gExpr = `(1-exp(-(${distExpr}/${maxDist})*3))*(${toRGB.g}-${fromRGB.g})+${fromRGB.g}+${pulseAmp}*${fromRGB.g}*cos(t*2*PI/${cycleSlow}*1.3)`;
+  const gExpr = `(1-exp(-(${distExpr}/${maxDist})*3))*(${toRGB.g}-${fromRGB.g})+${fromRGB.g}+${pulseAmp}*${fromRGB.g}*cos(T*2*PI/${cycleSlow}*1.3)`;
 
-  // B channel with opposite phase
-  const bExpr = `(1-exp(-(${distExpr}/${maxDist})*3))*(${toRGB.b}-${fromRGB.b})+${fromRGB.b}+${pulseAmp}*${fromRGB.b}*sin(t*2*PI/${cycleSlow}*0.7)`;
+  const bExpr = `(1-exp(-(${distExpr}/${maxDist})*3))*(${toRGB.b}-${fromRGB.b})+${fromRGB.b}+${pulseAmp}*${fromRGB.b}*sin(T*2*PI/${cycleSlow}*0.7)`;
 
-  return `geq=r=${rExpr}:g=${gExpr}:b=${bExpr}`;
+  return `geq=r='${rExpr}':g='${gExpr}':b='${bExpr}'`;
 }
 
 /**

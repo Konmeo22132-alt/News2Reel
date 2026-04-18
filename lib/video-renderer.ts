@@ -168,8 +168,8 @@ async function renderScene(opts: {
     // Pop-in entrance: scale from 0 → 1.2 → 1.0 over 400ms
     // Floating: sine wave on Y axis (amplitude 15px, period ~2s)
     const popIn = `scale=${iconW}:${iconH},setpts=PTS-STARTPTS+${(sceneIndex * 0.1).toFixed(2)}/TB`;
-    const floating = `overlay=${baseX}:${baseY}:format=auto:enable='between(t,${(sceneIndex * 0.1).toFixed(2)},${videoDuration})'` +
-      `:x=${baseX}:y=${baseY}+floor(15*sin(2*PI*t))`;
+    const floating = `overlay=format=auto:enable='between(t\,${(sceneIndex * 0.1).toFixed(2)}\,${videoDuration})'` +
+      `:x=${baseX}:y='${baseY}+floor(15*sin(2*PI*t))'`;
 
     // Use trim/setpts to handle pop-in timing per scene
     filterComplex += `[2:v]${popIn}[icon]; `;
@@ -196,8 +196,8 @@ async function renderScene(opts: {
 
   // ── Layer 4: ASS subtitles (bouncing karaoke) ──
   const baseLabel = isMiddleScene ? "base" : (hasIcon ? "with_icon" : hasTerminal ? "with_box" : "bg");
-  const assEscaped = assPath.replace(/\\/g, "/").replace(/:/g, "\\:");
-  filterComplex += `[${baseLabel}]ass='${assEscaped}'[out]`;
+  const assEscaped = assPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "\\'");
+  filterComplex += `[${baseLabel}]ass=${assEscaped}[out]`;
 
   return new Promise<void>((resolve, reject) => {
     const cmd = ffmpeg();
@@ -435,15 +435,15 @@ export async function renderTestScene(
     // Input 2: Icon (if exists)
     // Input 3: BGM (if exists)
 
-    const escapedAssPath = assPath.replace(/\\/g, "/").replace(/:/g, "\\:");
+    const escapedAssPath = assPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "\\'");
     let filterComplex = `[0:v]geq=r='15+15*sin(T)':g='10+5*sin(T)':b='15+10*sin(T)',vignette=PI/4[grad]; `;
 
     if (hasIcon) {
       filterComplex += `[2:v]scale=300:-1[icon_scaled]; `;
-      filterComplex += `[grad][icon_scaled]overlay=x='(W-w)/2':y='H/3 + 30*sin(t*3)':eval=frame[with_icon]; `;
-      filterComplex += `[with_icon]ass='${escapedAssPath}'[out]`;
+      filterComplex += `[grad][icon_scaled]overlay=x='(W-w)/2':y='H/3+30*sin(t*3)':eval=frame[with_icon]; `;
+      filterComplex += `[with_icon]ass=${escapedAssPath}[out]`;
     } else {
-      filterComplex += `[grad]ass='${escapedAssPath}'[out]`;
+      filterComplex += `[grad]ass=${escapedAssPath}[out]`;
     }
 
     return new Promise<string>((resolve, reject) => {
