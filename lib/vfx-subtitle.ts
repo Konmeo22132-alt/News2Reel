@@ -290,7 +290,7 @@ export function generateAnimatedGradientFilter(
 
   const bExpr = `(1-exp(-(${distExpr}/${maxDist})*3))*(${toRGB.b}-${fromRGB.b})+${fromRGB.b}+${pulseAmp}*${fromRGB.b}*sin(T*2*PI/${cycleSlow}*0.7)`;
 
-  return `geq=r='${rExpr}':g='${gExpr}':b='${bExpr}'`;
+  return `geq=r=${rExpr}:g=${gExpr}:b=${bExpr}`;
 }
 
 /**

@@ -148,9 +148,9 @@ export function buildCounterFilter(
     f = chain(f, "cnt_l");
   }
 
-  // Remove trailing ; [label] and add output
-  f = f.replace(/; \[cnt_[nl]\]$/, "");
-  f += `[${outputLabel}]`;
+  // chain() appends "[cnt_X]; [cnt_X]" — we must replace the WHOLE pair (not just "; [cnt_X]")
+  // to avoid leaving a dangling "[cnt_X]" before the output label.
+  f = f.replace(/\[cnt_[nl]\]; \[cnt_[nl]\]$/, `[${outputLabel}]`);
 
   return f;
 }
