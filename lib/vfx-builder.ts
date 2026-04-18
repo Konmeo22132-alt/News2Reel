@@ -8,9 +8,8 @@
  *   - Counter:     min(max(t-ST,0)/DUR,1)*END_VAL odometer
  *   - ProgressBar: dynamic drawbox width expression
  *   - Terminal:    character-by-character typewriter (0.05s per char)
- *   - VSScreen:    dual drawbox comparison layout
+ *   - VSScreen:    dual half-screen comparison layout
  *   - Checklist:   staggered enable='gte(t,X)' per item
- *   - Demo:        emoji icon + title (normal scene, handled by main renderer)
  *
  * All coordinates assume 1080×1920 (9:16 TikTok format).
  * Frame time `t` is scene-local (each scene is a separate FFmpeg call starting at t=0).
@@ -21,13 +20,18 @@
 const W = 1080;
 const H = 1920;
 
-/** System font for drawtext. Falls back gracefully on both Linux and Windows. */
-const FONT_BOLD =
-  "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
+/**
+ * Primary font — DejaVu Sans Bold.
+ * Guaranteed on Ubuntu/Debian. Covers Latin + Vietnamese diacritics (partial).
+ * For full Vietnamese support, install fonts-noto: apt-get install fonts-noto-core
+ */
+const FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
 
-/** Monospace font for terminal scenes */
-const FONT_MONO =
-  "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf";
+/**
+ * Fallback fonts tried in order for Vietnamese coverage.
+ * Terminal uses FONT_BOLD (NOT mono) because DejaVuSansMono lacks Vietnamese glyphs.
+ */
+const FONT_SANS = FONT_BOLD;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -83,33 +87,39 @@ export type SpecialSceneData =
 
 /**
  * Escape text for FFmpeg drawtext filter.
- * FFmpeg drawtext requires escaping: \ : , ' [ ]
+ * FFmpeg drawtext requires: \ : , ' [ ] must be escaped.
+ * Replace straight apostrophe with curly quote to avoid shell issues.
  */
 function esc(text: string): string {
   return text
     .replace(/\\/g, "\\\\\\\\")
-    .replace(/'/g, "\u2019")        // curly quote — avoids shell escaping issues
+    .replace(/'/g, "\u2019")        // curly quote — avoids shell escaping
     .replace(/:/g, "\\:")
     .replace(/,/g, "\\,")
     .replace(/\[/g, "\\[")
     .replace(/\]/g, "\\]");
 }
 
-/** Chain two filter segments with a labeled intermediate output */
+/** Wrap a filter segment with an intermediate label for chaining */
 function chain(segment: string, label: string): string {
   return segment + `[${label}]; [${label}]`;
 }
+
+/** Shared glow/shadow options for drawtext */
+const GLOW = `:shadowcolor=0x000000@0.9:shadowx=3:shadowy=3`;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // A. Counter Scene (Odometer Effect)
 // ─────────────────────────────────────────────────────────────────────────────
 /**
- * Giant glowing number that counts up from 0 → counter_end over the scene duration.
+ * Giant glowing number that counts up from 0 → counter_end over the scene.
+ *
+ * Layout (1080×1920):
+ *   - Number: center-X, Y ~= height*0.35 (upper third — clear of subtitle zone)
+ *   - Label:  center-X, Y ~= number_Y + 260
  *
  * FFmpeg formula (scene-local t starts at 0):
  *   value = min(max(t, 0) / RAMP_DUR, 1) * END_VAL
- *
- * We ramp over 80% of the scene duration so the number lands before audio ends.
  */
 export function buildCounterFilter(
   scene: CounterSceneData,
@@ -117,40 +127,38 @@ export function buildCounterFilter(
 ): string {
   const { inputLabel, outputLabel, width = W, height = H, duration = 5 } = opts;
   const END = scene.counter_end;
-  const RAMP = (duration * 0.8).toFixed(3); // ramp over 80% of scene
+  const RAMP = (duration * 0.8).toFixed(3);
   const prefix = scene.counter_prefix ?? "";
   const suffix = scene.counter_suffix ?? "";
   const label = scene.counter_label ?? "";
 
-  const cy = Math.floor(height / 2);
-  const numY = cy - 130;
-  const lblY = cy + 80;
+  // Position in upper-center of screen — well clear of subtitle zone at bottom
+  const numY = Math.floor(height * 0.3);
+  const lblY = numY + 240;
 
-  // The expression computes int(min(t/RAMP, 1) * END)
   const countExpr = `%{expr_int_format\\:min(max(t\\,0)/${RAMP}\\,1)*${END}\\:d\\:0}`;
   const displayText = `${esc(prefix)}${countExpr}${esc(suffix)}`;
 
   let f = `[${inputLabel}]`;
 
-  // Giant red counter number
+  // Giant red counter with glow
   f += `drawtext=text='${displayText}'`;
   f += `:x=(w-tw)/2:y=${numY}`;
-  f += `:fontsize=210:fontcolor=0xFF3333@1`;
+  f += `:fontsize=240:fontcolor=0xFF3333@1`;
   f += `:fontfile='${FONT_BOLD}'`;
-  f = chain(f, "cnt_n");
+  f += GLOW;
 
-  // Label below number
   if (label) {
+    f = chain(f, "cnt_n");
     f += `drawtext=text='${esc(label)}'`;
     f += `:x=(w-tw)/2:y=${lblY}`;
-    f += `:fontsize=54:fontcolor=0xFFFFFF@0.88`;
+    f += `:fontsize=58:fontcolor=0xFFFFFF@0.95`;
     f += `:fontfile='${FONT_BOLD}'`;
-    f = chain(f, "cnt_l");
+    f += GLOW;
+    f += `[${outputLabel}]`;
+  } else {
+    f += `[${outputLabel}]`;
   }
-
-  // chain() appends "[cnt_X]; [cnt_X]" — we must replace the WHOLE pair (not just "; [cnt_X]")
-  // to avoid leaving a dangling "[cnt_X]" before the output label.
-  f = f.replace(/\[cnt_[nl]\]; \[cnt_[nl]\]$/, `[${outputLabel}]`);
 
   return f;
 }
@@ -159,7 +167,7 @@ export function buildCounterFilter(
 // B. Progress Bar Scene
 // ─────────────────────────────────────────────────────────────────────────────
 /**
- * Horizontal bar that fills from 0 → target% using a dynamic drawbox width.
+ * Horizontal bar filling from 0 → target% using dynamic drawbox width.
  *
  * FFmpeg formula:
  *   w = 'min(max(t,0)/RAMP, 1) * MAX_BAR_WIDTH'
@@ -173,12 +181,12 @@ export function buildProgressBarFilter(
   const label = scene.progress_label ?? "";
   const RAMP = (duration * 0.75).toFixed(3);
 
-  const BAR_H = 58;
+  const BAR_H = 64;
   const BAR_X = 60;
   const BAR_W = width - 120;
-  const BAR_Y = Math.floor(height / 2) + 30;
-  const LABEL_Y = BAR_Y - 80;
-  const PCT_Y = BAR_Y + BAR_H + 24;
+  const BAR_Y = Math.floor(height * 0.45);
+  const LABEL_Y = BAR_Y - 90;
+  const PCT_Y = BAR_Y + BAR_H + 28;
 
   const targetFrac = (target / 100).toFixed(4);
   const fillWExpr = `min(max(t\\,0)/${RAMP}\\,1)*${targetFrac}*${BAR_W}`;
@@ -186,23 +194,22 @@ export function buildProgressBarFilter(
 
   let f = `[${inputLabel}]`;
 
-  // Background track
-  f += `drawbox=x=${BAR_X}:y=${BAR_Y}:w=${BAR_W}:h=${BAR_H}:color=0x333333@1:t=fill`;
+  // Dark background track
+  f += `drawbox=x=${BAR_X}:y=${BAR_Y}:w=${BAR_W}:h=${BAR_H}:color=0x222222@1:t=fill`;
   f = chain(f, "pb_bg");
 
-  // Animated fill
+  // Animated fill bar
   f += `drawbox=x=${BAR_X}:y=${BAR_Y}:w='${fillWExpr}':h=${BAR_H}:color=0xFF3333@1:t=fill`;
   f = chain(f, "pb_bar");
 
   // Optional label
   if (label) {
-    f += `drawtext=text='${esc(label)}':x=(w-tw)/2:y=${LABEL_Y}:fontsize=52:fontcolor=0xFFFFFF:fontfile='${FONT_BOLD}'`;
+    f += `drawtext=text='${esc(label)}':x=(w-tw)/2:y=${LABEL_Y}:fontsize=56:fontcolor=0xFFFFFF:fontfile='${FONT_BOLD}'${GLOW}`;
     f = chain(f, "pb_lbl");
   }
 
   // Percentage counter
-  f += `drawtext=text='${pctExpr}':x=(w-tw)/2:y=${PCT_Y}:fontsize=76:fontcolor=0xFF5555:fontfile='${FONT_BOLD}'`;
-
+  f += `drawtext=text='${pctExpr}':x=(w-tw)/2:y=${PCT_Y}:fontsize=80:fontcolor=0xFF5555:fontfile='${FONT_BOLD}'${GLOW}`;
   f += `[${outputLabel}]`;
   return f;
 }
@@ -213,10 +220,10 @@ export function buildProgressBarFilter(
 /**
  * macOS-style terminal window with character-by-character typewriter.
  *
- * Per spec: Loop over each character and emit a drawtext with
- * `enable='gte(t, charIndex * 0.05)'` so characters appear one by one.
+ * FONT NOTE: Uses FONT_BOLD (not mono) because DejaVuSansMono lacks Vietnamese
+ * character support. FONT_BOLD still looks code-like in a dark window.
  *
- * Approximate char width for monospace fontsize=32 ≈ 18px per char.
+ * Each character appears at `charIndex * 0.05s`.
  */
 export function buildTerminalFilter(
   scene: TerminalSceneData,
@@ -225,67 +232,73 @@ export function buildTerminalFilter(
   const { inputLabel, outputLabel, width = W, height = H } = opts;
   const { terminal_lines: lines, terminal_title = "" } = scene;
 
-  const PANEL_W = width - 80;
-  const LINE_H = 52;
-  const BAR_H = 46;
-  const PANEL_H = Math.min(BAR_H + 20 + lines.length * LINE_H + 20, 480);
-  const PANEL_X = 40;
-  const PANEL_Y = Math.floor(height / 2) - Math.floor(PANEL_H / 2);
-  const CHAR_W = 18; // approximate for fontsize=32 monospace
-  const CHAR_DELAY = 0.05; // seconds per character
+  const PANEL_W = width - 60;
+  const LINE_H = 58;
+  const BAR_H = 50;
+  const PANEL_H = Math.min(BAR_H + 24 + lines.length * LINE_H + 24, 520);
+  const PANEL_X = 30;
+  // Center vertically in upper 60% of screen (keep below from subtitle zone)
+  const PANEL_Y = Math.floor(height * 0.25) - Math.floor(PANEL_H / 2);
+  const CHAR_W = 17;
+  const CHAR_DELAY = 0.05;
 
   let f = `[${inputLabel}]`;
   let nodeIdx = 0;
 
-  const mid = (from: string, to: string) => {
-    f += `[w${nodeIdx}]; [w${nodeIdx}]`;
-    nodeIdx++;
-  };
-
-  // ── Window background ──
-  f += `drawbox=x=${PANEL_X}:y=${PANEL_Y}:w=${PANEL_W}:h=${PANEL_H}:color=0x1A1A1AEE:t=fill`;
+  // ── Window shadow (slightly larger, dark) ──
+  f += `drawbox=x=${PANEL_X - 6}:y=${PANEL_Y - 6}:w=${PANEL_W + 12}:h=${PANEL_H + 12}:color=0x000000@0.7:t=fill`;
   f = chain(f, `t${nodeIdx++}`);
 
-  // ── Title bar ──
-  f += `drawbox=x=${PANEL_X}:y=${PANEL_Y}:w=${PANEL_W}:h=${BAR_H}:color=0x2D2D2DEE:t=fill`;
+  // ── Window background ──
+  f += `drawbox=x=${PANEL_X}:y=${PANEL_Y}:w=${PANEL_W}:h=${PANEL_H}:color=0x1C1C1C@1:t=fill`;
+  f = chain(f, `t${nodeIdx++}`);
+
+  // ── Title bar (slightly lighter) ──
+  f += `drawbox=x=${PANEL_X}:y=${PANEL_Y}:w=${PANEL_W}:h=${BAR_H}:color=0x323232@1:t=fill`;
   f = chain(f, `t${nodeIdx++}`);
 
   // ── Traffic light dots ──
-  const DOT_Y = PANEL_Y + Math.floor((BAR_H - 20) / 2);
+  const DOT_Y = PANEL_Y + Math.floor((BAR_H - 22) / 2);
   const DOTS = [
-    { x: PANEL_X + 16, color: "0xFF5F56" },
-    { x: PANEL_X + 44, color: "0xFFBD2E" },
-    { x: PANEL_X + 72, color: "0x28CA41" },
+    { x: PANEL_X + 18, color: "0xFF5F56" },
+    { x: PANEL_X + 48, color: "0xFFBD2E" },
+    { x: PANEL_X + 78, color: "0x28CA41" },
   ];
   for (const dot of DOTS) {
-    f += `drawbox=x=${dot.x}:y=${DOT_Y}:w=20:h=20:color=${dot.color}:t=fill`;
+    f += `drawbox=x=${dot.x}:y=${DOT_Y}:w=22:h=22:color=${dot.color}:t=fill`;
     f = chain(f, `t${nodeIdx++}`);
   }
 
   // ── Optional title in bar ──
   if (terminal_title) {
-    f += `drawtext=text='${esc(terminal_title.slice(0, 40))}':x=${PANEL_X + 108}:y=${PANEL_Y + 11}:fontsize=26:fontcolor=0xCCCCCC:fontfile='${FONT_BOLD}'`;
+    f += `drawtext=text='${esc(terminal_title.slice(0, 45))}':x=${PANEL_X + 120}:y=${PANEL_Y + 13}:fontsize=28:fontcolor=0xAAAAAA:fontfile='${FONT_BOLD}'`;
     f = chain(f, `t${nodeIdx++}`);
   }
 
-  // ── Typewriter lines (char by char) ──
-  const LINE_START_Y = PANEL_Y + BAR_H + 14;
+  // ── Typewriter: char-by-char for each line ──
+  const LINE_START_Y = PANEL_Y + BAR_H + 16;
+
+  if (lines.length === 0) {
+    // Edge case: no lines
+    f += `drawtext=text='':x=0:y=0[${outputLabel}]`;
+    return f;
+  }
 
   for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
-    const lineStr = lines[lineIdx].slice(0, 60); // cap at 60 chars
-    const lineDelay = lineIdx * (lineStr.length + 2) * CHAR_DELAY; // previous lines' time
+    const lineStr = lines[lineIdx].slice(0, 55);
+    const lineDelay = lineIdx * (lineStr.length + 3) * CHAR_DELAY;
     const isCommand = lineStr.startsWith(">");
     const charColor = isCommand ? "0x00FF88" : "0xCCCCCC";
     const lineY = LINE_START_Y + lineIdx * LINE_H;
 
     for (let charIdx = 0; charIdx < lineStr.length; charIdx++) {
       const char = lineStr[charIdx];
-      const charX = PANEL_X + 16 + charIdx * CHAR_W;
+      const charX = PANEL_X + 18 + charIdx * CHAR_W;
       const appearTime = (lineDelay + charIdx * CHAR_DELAY).toFixed(3);
 
       f += `drawtext=text='${esc(char)}':x=${charX}:y=${lineY}`;
-      f += `:fontsize=32:fontcolor=${charColor}`;
-      f += `:fontfile='${FONT_MONO}'`;
+      f += `:fontsize=34:fontcolor=${charColor}`;
+      f += `:fontfile='${FONT_SANS}'`;     // FONT_SANS = FONT_BOLD for Vietnamese support
       f += `:enable='gte(t,${appearTime})'`;
 
       const isLast = lineIdx === lines.length - 1 && charIdx === lineStr.length - 1;
@@ -293,12 +306,6 @@ export function buildTerminalFilter(
         f = chain(f, `t${nodeIdx++}`);
       }
     }
-  }
-
-  // Edge case: no lines → just close the window box
-  if (lines.length === 0) {
-    f = chain(f, `t${nodeIdx++}`);
-    f += `drawtext=text='':x=0:y=0`;
   }
 
   f += `[${outputLabel}]`;
@@ -309,8 +316,11 @@ export function buildTerminalFilter(
 // D. VS Screen Scene (Side-by-side Comparison)
 // ─────────────────────────────────────────────────────────────────────────────
 /**
- * Two colored boxes with text, separated by a "VS" badge.
- * Colors support AARRGGBB hex (opacity in color = 0x8B0000@0.85 syntax).
+ * Two equal vertical panels with text and a "VS" badge in the center gap.
+ *
+ * Layout fix: each panel is half the screen width minus padding.
+ * Text is centered inside its panel, not overlapping the gap.
+ * "VS" badge sits exactly in the center of the screen.
  */
 export function buildVSScreenFilter(
   scene: VSScreenSceneData,
@@ -320,38 +330,54 @@ export function buildVSScreenFilter(
   const leftColor = (scene.vs_left_color ?? "#6B0000").replace("#", "0x");
   const rightColor = (scene.vs_right_color ?? "#003B1E").replace("#", "0x");
 
-  const GAP = 24;
-  const BOX_W = Math.floor((width - GAP * 3) / 2);
-  const BOX_H = 140;
-  const BOX_Y = Math.floor(height / 2) - Math.floor(BOX_H / 2);
-  const LEFT_X = GAP;
-  const RIGHT_X = GAP * 2 + BOX_W;
-  const VS_X = GAP + BOX_W + Math.floor(GAP / 2) - 22;
-  const TEXT_Y = BOX_Y + Math.floor(BOX_H / 2) - 26;
+  const GAP = 8;              // gap between the two panels
+  const PANEL_W = Math.floor((width - GAP) / 2);
+  const PANEL_H = Math.floor(height * 0.22); // 22% of screen height
+  const PANEL_Y = Math.floor(height / 2) - Math.floor(PANEL_H / 2);
+
+  const LEFT_X = 0;
+  const RIGHT_X = PANEL_W + GAP;
+  const CENTER_X = Math.floor(width / 2);
+
+  // Text is centered INSIDE each panel (not near the edge where VS badge sits)
+  // Use x=(LEFT_X + PANEL_W/2 - text_center) → approximate with left offset
+  const LEFT_TEXT_X = LEFT_X + 24;
+  const RIGHT_TEXT_X = RIGHT_X + 24;
+  const TEXT_Y = PANEL_Y + Math.floor(PANEL_H * 0.35);
+
+  // VS badge
+  const VS_BADGE_X = CENTER_X - 36;
+  const VS_BADGE_Y = PANEL_Y + Math.floor(PANEL_H / 2) - 36;
 
   let nodeIdx = 0;
   let f = `[${inputLabel}]`;
 
-  // Left box
-  f += `drawbox=x=${LEFT_X}:y=${BOX_Y}:w=${BOX_W}:h=${BOX_H}:color=${leftColor}@0.88:t=fill`;
+  // Left panel
+  f += `drawbox=x=${LEFT_X}:y=${PANEL_Y}:w=${PANEL_W}:h=${PANEL_H}:color=${leftColor}@0.92:t=fill`;
   f = chain(f, `vs${nodeIdx++}`);
 
-  // Right box
-  f += `drawbox=x=${RIGHT_X}:y=${BOX_Y}:w=${BOX_W}:h=${BOX_H}:color=${rightColor}@0.88:t=fill`;
+  // Right panel
+  f += `drawbox=x=${RIGHT_X}:y=${PANEL_Y}:w=${PANEL_W}:h=${PANEL_H}:color=${rightColor}@0.92:t=fill`;
   f = chain(f, `vs${nodeIdx++}`);
 
-  // Left text (red accent)
-  f += `drawtext=text='${esc(scene.vs_left)}':x=${LEFT_X + 20}:y=${TEXT_Y}:fontsize=46:fontcolor=0xFF6666:fontfile='${FONT_BOLD}'`;
+  // Left label (truncate to 12 chars to fit panel)
+  const leftStr = esc(scene.vs_left.slice(0, 12));
+  f += `drawtext=text='${leftStr}':x=${LEFT_TEXT_X}:y=${TEXT_Y}:fontsize=52:fontcolor=0xFF8888:fontfile='${FONT_BOLD}'${GLOW}`;
   f = chain(f, `vs${nodeIdx++}`);
 
-  // Right text (green accent)
-  f += `drawtext=text='${esc(scene.vs_right)}':x=${RIGHT_X + 20}:y=${TEXT_Y}:fontsize=46:fontcolor=0x66FF99:fontfile='${FONT_BOLD}'`;
+  // Right label (truncate to 12 chars to fit panel)
+  const rightStr = esc(scene.vs_right.slice(0, 12));
+  f += `drawtext=text='${rightStr}':x=${RIGHT_TEXT_X}:y=${TEXT_Y}:fontsize=52:fontcolor=0x88FF99:fontfile='${FONT_BOLD}'${GLOW}`;
   f = chain(f, `vs${nodeIdx++}`);
 
-  // VS badge (white)
-  f += `drawtext=text='VS':x=${VS_X}:y=${TEXT_Y + 4}:fontsize=52:fontcolor=0xFFFFFF@0.95:fontfile='${FONT_BOLD}'`;
+  // "VS" badge circle (dark background)
+  f += `drawbox=x=${CENTER_X - 44}:y=${VS_BADGE_Y - 10}:w=88:h=88:color=0x111111@0.95:t=fill`;
+  f = chain(f, `vs${nodeIdx++}`);
 
+  // "VS" text
+  f += `drawtext=text='VS':x=${VS_BADGE_X}:y=${VS_BADGE_Y}:fontsize=56:fontcolor=0xFFFF00@0.98:fontfile='${FONT_BOLD}'${GLOW}`;
   f += `[${outputLabel}]`;
+
   return f;
 }
 
@@ -360,7 +386,8 @@ export function buildVSScreenFilter(
 // ─────────────────────────────────────────────────────────────────────────────
 /**
  * Items appear one by one using enable='gte(t, APPEAR_TIME)'.
- * Each item staggered by 0.7s. ✓ checkmark in green, text in white.
+ * Stagger = 0.7s. ✓ checkmark in green, text in white with glow.
+ * Positioned in the upper-center zone (clear of subtitle at bottom).
  */
 export function buildChecklistFilter(
   scene: ChecklistSceneData,
@@ -370,30 +397,31 @@ export function buildChecklistFilter(
   const { checklist_items: items } = scene;
 
   if (!items?.length) {
-    return `[${inputLabel}]null[${outputLabel}]`;
+    return `[${inputLabel}]drawtext=text='':x=0:y=0[${outputLabel}]`;
   }
 
   const STAGGER = 0.7;
-  const LINE_H = 84;
-  const START_Y = Math.floor(height / 2) - Math.floor((items.length * LINE_H) / 2);
+  const LINE_H = 90;
+  // Position in upper 40% of screen
+  const startY = Math.floor(height * 0.2);
   const CHECK_X = 64;
-  const TEXT_X = 148;
+  const TEXT_X = 160;
 
   let nodeIdx = 0;
   let f = `[${inputLabel}]`;
 
   for (let i = 0; i < items.length; i++) {
-    const y = START_Y + i * LINE_H;
+    const y = startY + i * LINE_H;
     const appear = (i * STAGGER).toFixed(2);
-    const text = esc(items[i].slice(0, 42));
+    const text = esc(items[i].slice(0, 38));
     const isLast = i === items.length - 1;
 
     // ✓ checkmark
-    f += `drawtext=text='✓':x=${CHECK_X}:y=${y}:fontsize=60:fontcolor=0x00FF88:fontfile='${FONT_BOLD}':enable='gte(t,${appear})'`;
+    f += `drawtext=text='✓':x=${CHECK_X}:y=${y}:fontsize=64:fontcolor=0x00FF88:fontfile='${FONT_BOLD}':enable='gte(t,${appear})'${GLOW}`;
     f = chain(f, `cl${nodeIdx++}`);
 
     // Item text
-    f += `drawtext=text='${text}':x=${TEXT_X}:y=${y + 4}:fontsize=54:fontcolor=0xFFFFFF:fontfile='${FONT_BOLD}':enable='gte(t,${appear})'`;
+    f += `drawtext=text='${text}':x=${TEXT_X}:y=${y + 4}:fontsize=58:fontcolor=0xFFFFFF:fontfile='${FONT_BOLD}':enable='gte(t,${appear})'${GLOW}`;
 
     if (!isLast) {
       f = chain(f, `cl${nodeIdx++}`);
@@ -409,9 +437,11 @@ export function buildChecklistFilter(
 // ─────────────────────────────────────────────────────────────────────────────
 /**
  * Routes scene data to the correct filter builder.
- * Returns null if no special filter is needed (scene_type === "normal" / "demo").
+ * Returns null for normal/demo scenes (handled by main renderer).
  *
- * Caller is responsible for connecting [specialOut] → ass filter → [out].
+ * Caller MUST:
+ *   filterComplex += specialFilter + "; ";
+ *   filterComplex += `[special_out]ass='...'[out]`;
  */
 export function buildSceneFilter(
   sceneData: Record<string, unknown>,
@@ -456,5 +486,14 @@ export function buildSceneFilter(
       break;
   }
 
-  return null; // "normal" / "demo" scenes — handled by caller
+  return null; // normal/demo — handled by main renderer
+}
+
+/**
+ * Returns true if a scene_type requires a full-screen special layout.
+ * Used by video-renderer.ts to skip rendering the floating emoji icon
+ * (which would overlap with the special scene elements).
+ */
+export function isSpecialSceneType(sceneType: string): boolean {
+  return ["counter", "vs_screen", "terminal", "checklist", "progress_bar"].includes(sceneType);
 }

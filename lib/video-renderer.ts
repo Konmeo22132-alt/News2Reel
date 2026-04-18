@@ -33,7 +33,7 @@ import {
   DEFAULT_ASS_STYLE,
   saveASSFile,
 } from "./vfx-subtitle";
-import { buildSceneFilter } from "./vfx-builder";
+import { buildSceneFilter, isSpecialSceneType } from "./vfx-builder";
 
 type FfmpegStatic = typeof import("fluent-ffmpeg");
 
@@ -155,7 +155,11 @@ async function renderScene(opts: {
   filterComplex += `[0:v]${gradFilter}[bg]; `;
 
   // ── Layer 2: Dynamic icon animation (pop-in + floating sine) ──
-  if (hasIcon) {
+  // Skip icon for special scene types — they have their own full-screen layouts
+  const sceneTypeStr = (opts as any).scene_type as string || "normal";
+  const skipIcon = isSpecialSceneType(sceneTypeStr);
+
+  if (hasIcon && !skipIcon) {
     // Scale icon to 280px wide
     const iconW = 280;
     const iconH = -1; // maintain aspect
@@ -176,15 +180,16 @@ async function renderScene(opts: {
 
   // ── Layer 3: Scene counter + scene number text ──
   const isMiddleScene = !isHook && !isCTA;
+  const iconRendered = hasIcon && !skipIcon;
   if (isMiddleScene) {
     const counterText = `${sceneIndex}/${totalScenes - 2}`;
-    const counterFilter = `[${hasIcon ? "with_icon" : "bg"}]` +
+    const counterFilter = `[${iconRendered ? "with_icon" : "bg"}]` +
       `drawtext=text='${counterText}':fontsize=28:fontcolor=0xffffff@0.35:x=(w-tw)/2:y=80:font=Roboto[base]; `;
     filterComplex += counterFilter;
   }
 
   // ── Layer 4: Scene-type special overlays + ASS subtitle karaoke ──
-  const baseLabel = isMiddleScene ? "base" : (hasIcon ? "with_icon" : "bg");
+  const baseLabel = isMiddleScene ? "base" : (iconRendered ? "with_icon" : "bg");
   const assEscaped = assPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\''");
 
   // Try special scene renderer first

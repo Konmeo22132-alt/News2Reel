@@ -34,14 +34,15 @@ export interface ASSStyle {
 }
 
 // Default style for TikTok tech videos
+// IMPORTANT: Font must be installed on the VPS. DejaVu is guaranteed on Ubuntu.
 export const DEFAULT_ASS_STYLE: ASSStyle = {
-  font: "Roboto Black",
-  fontSize: 100,
+  font: "DejaVu Sans",
+  fontSize: 110,
   primaryColor: ASS_COLORS.white,
   outlineColor: ASS_COLORS.black,
   shadowColor: ASS_COLORS.black,
   bold: true,
-  alignment: 5, // Center
+  alignment: 2, // Bottom center (TikTok standard)
 };
 
 // ─── Keyword parsing ─────────────────────────────────────────────────────────
@@ -216,7 +217,9 @@ export function generateWordByWordASS(
   ass += generateStyleSection(finalStyle);
   ass += "[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n";
 
-  const subY = 960; // Vertical center (1080p height)
+  // 1580 = bottom safe zone for 1920px tall video (TikTok standard subtitle position)
+  // Keeping it above 1700 to avoid being cut on smaller screens
+  const subY = 1580;
 
   for (const timing of timings) {
     const startTime = formatASSTime(timing.start);
