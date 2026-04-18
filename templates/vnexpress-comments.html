@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VNExpress Comments Card</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    * { font-family: 'Inter', -apple-system, sans-serif; box-sizing: border-box; }
+
+    body {
+      background: radial-gradient(ellipse at 50% 80%, #0d0510 0%, #05050f 60%, #100505 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      margin: 0;
+    }
+
+    .panel {
+      width: 900px;
+      background: #18191d;
+      border: 1px solid #2a2d35;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.04),
+        0 28px 80px rgba(0,0,0,0.88);
+    }
+
+    /* Header bar mimicking VNExpress comment section */
+    .panel-header {
+      background: linear-gradient(135deg, #1a1d24, #222530);
+      border-bottom: 1px solid #2a2d35;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .vnex-icon {
+      width: 32px; height: 32px;
+      background: #e61c24;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 900; color: white;
+      letter-spacing: -0.5px;
+      flex-shrink: 0;
+    }
+
+    .header-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #e7e9ea;
+    }
+
+    .header-sub {
+      font-size: 13px;
+      color: #6b7280;
+      margin-top: 1px;
+    }
+
+    .comment-count-badge {
+      margin-left: auto;
+      background: rgba(230,28,36,0.15);
+      border: 1px solid rgba(230,28,36,0.35);
+      color: #ff6b6b;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
+
+    /* Individual comment */
+    .comment {
+      padding: 16px 22px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      display: flex;
+      gap: 13px;
+      align-items: flex-start;
+      position: relative;
+      transition: background 0.2s;
+    }
+
+    .comment:hover { background: rgba(255,255,255,0.018); }
+
+    .comment:last-child { border-bottom: none; }
+
+    /* Highlight the "selected" comment for narration */
+    .comment.featured {
+      background: rgba(29, 155, 240, 0.06);
+      border-left: 3px solid #1d9bf0;
+      border-bottom: 1px solid rgba(29,155,240,0.1);
+    }
+
+    .comment.featured:last-child { border-bottom: none; }
+
+    .avatar-ring {
+      width: 42px; height: 42px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; font-weight: 800;
+      color: white;
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    /* Green ring for "best comment" */
+    .avatar-ring.best::after {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #00d084, #00a8ff);
+      z-index: -1;
+    }
+
+    .comment-body { flex: 1; min-width: 0; }
+
+    .comment-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+
+    .comment-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: #cbd5e1;
+    }
+
+    .comment-location {
+      font-size: 12px;
+      color: #6b7280;
+      background: rgba(255,255,255,0.05);
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+
+    .comment-time {
+      font-size: 12px;
+      color: #6b7280;
+      margin-left: auto;
+    }
+
+    .comment-text {
+      font-size: 15.5px;
+      line-height: 1.55;
+      color: #d1d5db;
+    }
+
+    .comment-text em {
+      font-style: normal;
+      color: #fbbf24;
+      font-weight: 600;
+    }
+
+    .comment-text strong {
+      color: #e7e9ea;
+      font-weight: 700;
+    }
+
+    .comment-actions {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-top: 10px;
+    }
+
+    .like-btn {
+      display: flex; align-items: center; gap: 4px;
+      font-size: 13px; color: #71767b;
+      cursor: default;
+    }
+
+    .like-btn.liked { color: #3b82f6; }
+    .like-btn svg { width: 15px; height: 15px; }
+
+    .reply-btn {
+      font-size: 13px;
+      color: #6b7280;
+      cursor: default;
+    }
+
+    /* Narration banner at bottom */
+    .narration-banner {
+      background: linear-gradient(135deg, rgba(29,155,240,0.12), rgba(120,86,255,0.12));
+      border-top: 1px solid rgba(29,155,240,0.2);
+      padding: 16px 24px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .narrator-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, #1d9bf0, #7856ff);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .narration-text {
+      font-size: 14.5px;
+      line-height: 1.55;
+      color: #94a3b8;
+      font-style: italic;
+    }
+
+    .narration-label {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #1d9bf0;
+      margin-bottom: 4px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="panel">
+
+  <!-- Header -->
+  <div class="panel-header">
+    <div class="vnex-icon">VN</div>
+    <div>
+      <div class="header-title">Bình luận độc giả · VnExpress</div>
+      <div class="header-sub">Xuồng Iran tấn công tàu dầu ở eo biển Hormuz</div>
+    </div>
+    <div class="comment-count-badge">2,847 bình luận</div>
+  </div>
+
+  <!-- Comment 1 — Featured (will have narration) -->
+  <div class="comment featured">
+    <div class="avatar-ring best" style="background: linear-gradient(135deg, #f59e0b, #ef4444); padding: 2px;">
+      <div style="background:#18191d; border-radius:50%; width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:15px;">T</div>
+    </div>
+    <div class="comment-body">
+      <div class="comment-meta">
+        <span class="comment-name">Trung Nguyễn</span>
+        <span class="comment-location">📍 Hà Nội</span>
+        <span class="comment-time">2 giờ trước</span>
+      </div>
+      <div class="comment-text">
+        <em>Đây không phải ngẫu nhiên.</em> Iran đang phát tín hiệu rất rõ ràng: khi bị dồn vào góc tường, họ sẵn sàng
+        <strong>đóng eo biển Hormuz</strong> — điều mà cả thế giới đều sợ. Giá dầu leo thang, kinh tế toàn cầu chao đảo.
+        Đây là ván cờ địa chính trị nguy hiểm nhất từ vụ vịnh Ba Tư 1988.
+      </div>
+      <div class="comment-actions">
+        <div class="like-btn liked">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z"/></svg>
+          4,291 thích
+        </div>
+        <div class="reply-btn">💬 218 phản hồi</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Comment 2 -->
+  <div class="comment">
+    <div class="avatar-ring" style="background: linear-gradient(135deg, #3b82f6, #1e40af);">H</div>
+    <div class="comment-body">
+      <div class="comment-meta">
+        <span class="comment-name">Hùng Phạm</span>
+        <span class="comment-location">📍 TP.HCM</span>
+        <span class="comment-time">1 giờ trước</span>
+      </div>
+      <div class="comment-text">
+        Mọi người chú ý: 20% dầu mỏ toàn cầu qua eo Hormuz. Nếu Iran thật sự <strong>phong tỏa tuyến này</strong>,
+        giá xăng trong nước có thể <em>tăng 30-50%</em> chỉ trong vài tuần. Chúng ta cần nhìn xa hơn câu chuyện quân sự.
+      </div>
+      <div class="comment-actions">
+        <div class="like-btn liked">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z"/></svg>
+          2,876 thích
+        </div>
+        <div class="reply-btn">💬 94 phản hồi</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Comment 3 — Critical/contrarian view -->
+  <div class="comment">
+    <div class="avatar-ring" style="background: linear-gradient(135deg, #10b981, #065f46);">L</div>
+    <div class="comment-body">
+      <div class="comment-meta">
+        <span class="comment-name">Long Lê</span>
+        <span class="comment-location">📍 Đà Nẵng</span>
+        <span class="comment-time">45 phút trước</span>
+      </div>
+      <div class="comment-text">
+        Cần bình tĩnh. Iran đã <em>đe dọa đóng Hormuz nhiều lần</em> từ năm 2012, 2018, 2019...
+        nhưng chưa lần nào thực hiện vì <strong>chính họ cũng cần xuất khẩu dầu</strong> qua đây.
+        Đây là "ngoại giao bằng súng" — khiêu khích để đàm phán, không phải chiến tranh thật.
+      </div>
+      <div class="comment-actions">
+        <div class="like-btn">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z"/></svg>
+          1,543 thích
+        </div>
+        <div class="reply-btn">💬 67 phản hồi</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Narration banner -->
+  <div class="narration-banner">
+    <div class="narrator-icon">🎙️</div>
+    <div>
+      <div class="narration-label">🔍 Góc nhìn · Thuyết minh</div>
+      <div class="narration-text">
+        "Bình luận từ độc giả cho thấy rõ hai trường phái: những người lo ngại leo thang thật sự,
+        và những người cho rằng đây là chiến thuật đàm phán của Tehran.
+        Dù thế nào, tác động lên giá dầu và kinh tế toàn cầu là điều chắc chắn — Việt Nam không đứng ngoài."
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

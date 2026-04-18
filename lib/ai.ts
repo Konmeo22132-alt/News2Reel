@@ -78,21 +78,10 @@ QUY TẮC VIẾT NARRATION
 6. HOOK phải gây sốc/tò mò trong đúng 3 giây đầu — đây là yếu tố sống còn
 
 ═══════════════════════════════════════════
-LOẠI CẢNH (scene_type) — CHỌN ĐỂ HỖ TRỢ CÂU CHUYỆN, KHÔNG THAY THẾ NÓ
-═══════════════════════════════════════════
-
-- "normal":       Cảnh kể chuyện chính — emoji icon + karaoke subtitle. Dùng nhiều nhất.
-- "counter":      Khi nhắc đến CON SỐ nổi bật (%, ngày, tỷ đồng). counter_end + counter_label + counter_suffix
-- "vs_screen":    Khi CÓ SỰ TƯƠNG PHẢN rõ ràng. vs_left (tên ngắn) + vs_right (tên ngắn)
-- "terminal":     Khi đề cập CODE, CVE, lệnh kỹ thuật. terminal_lines (mảng lệnh, bắt đầu bằng ">")
-- "checklist":    Khi liệt kê HÀNH ĐỘNG hoặc ĐIỂM CHÍNH cuối video. checklist_items (3-5 mục)
-- "progress_bar": Khi có TỶ LỆ PHẦN TRĂM/thị phần. progress_target (số 0-100) + progress_label
-
-Visual IDs: laptop, rocket, skull, warning, terminal, robot, chip, globe, lock, chart, dollar, fire, star, lightning, shield, bell, scale
-
-═══════════════════════════════════════════
 FORMAT JSON — TRẢ VỀ CHÍNH XÁC, KHÔNG THÊM GÌ NGOÀI JSON
 ═══════════════════════════════════════════
+
+Visual IDs: laptop, rocket, skull, warning, terminal, robot, chip, globe, lock, chart, dollar, fire, star, lightning, shield, bell, scale
 
 {
   "title": "Tiêu đề hấp dẫn, tối đa 60 ký tự",
@@ -102,30 +91,19 @@ FORMAT JSON — TRẢ VỀ CHÍNH XÁC, KHÔNG THÊM GÌ NGOÀI JSON
       "narration": "Câu kể chuyện ĐẦY ĐỦ, 25-45 từ, có <keyword>từ quan trọng</keyword> được bọc tag. Không tóm tắt, hãy KỂ CHUYỆN như đang nói chuyện hấp dẫn với bạn bè.",
       "duration": 8,
       "visual_id": "globe",
-      "scene_type": "normal"
+      "image_index": 0
     },
     {
       "narration": "Và con số khiến tôi phải kiểm tra lại hai lần — trong vỏn vẹn 14 ngày, <keyword>22 lỗ hổng bảo mật</keyword> đã bị khai thác hoàn toàn tự động.",
       "duration": 6,
       "visual_id": "skull",
-      "scene_type": "counter",
-      "counter_end": 22,
-      "counter_label": "lỗ hổng bị khai thác",
-      "counter_suffix": ""
-    },
-    {
-      "narration": "Con người cần nhiều tuần để phân tích cùng khối lượng mã nguồn đó. AI làm trong 48 giờ. Đây không còn là tương lai nữa — đây là hiện tại.",
-      "duration": 7,
-      "visual_id": "lightning",
-      "scene_type": "vs_screen",
-      "vs_left": "Con người",
-      "vs_right": "AI Speed"
+      "image_index": 1
     }
   ],
   "callToAction": "Lời kêu gọi có cảm xúc, tối đa 20 từ — Follow/Like để không bỏ lỡ"
 }
 
-TỔNG THỜI LƯỢNG: 50-90 giây. Dùng ít nhất 2 loại scene_type khác nhau.
+TỔNG THỜI LƯỢNG: 50-90 giây.
 TUYỆT ĐỐI KHÔNG: viết câu dưới 20 từ cho narration, dùng bullet point kiểu liệt kê.
 `.trim();
 
@@ -219,7 +197,7 @@ export async function generateScript(
       const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
       const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
       
-      // Normalize to VideoScript format — forward all scene_type fields
+      // Normalize to VideoScript format
       script = {
         title: parsed.title || article.title.slice(0, 60),
         hook: parsed.hook || parsed.title || "",
@@ -227,25 +205,7 @@ export async function generateScript(
           narration: String(s.narration || s.text || s.content || ""),
           duration: Number(s.duration) || 6,
           visual_id: s.visual_id || VISUAL_IDS[Math.floor(Math.random() * VISUAL_IDS.length)],
-          scene_type: s.scene_type || "normal",
-          // counter fields
-          counter_end: s.counter_end !== undefined ? Number(s.counter_end) : undefined,
-          counter_label: s.counter_label ? String(s.counter_label) : undefined,
-          counter_suffix: s.counter_suffix !== undefined ? String(s.counter_suffix) : undefined,
-          counter_prefix: s.counter_prefix ? String(s.counter_prefix) : undefined,
-          // vs_screen fields
-          vs_left: s.vs_left ? String(s.vs_left) : undefined,
-          vs_right: s.vs_right ? String(s.vs_right) : undefined,
-          vs_left_color: s.vs_left_color ? String(s.vs_left_color) : undefined,
-          vs_right_color: s.vs_right_color ? String(s.vs_right_color) : undefined,
-          // terminal fields
-          terminal_title: s.terminal_title ? String(s.terminal_title) : undefined,
-          terminal_lines: Array.isArray(s.terminal_lines) ? s.terminal_lines.map(String) : undefined,
-          // checklist fields
-          checklist_items: Array.isArray(s.checklist_items) ? s.checklist_items.map(String) : undefined,
-          // progress_bar fields
-          progress_target: s.progress_target !== undefined ? Number(s.progress_target) : undefined,
-          progress_label: s.progress_label ? String(s.progress_label) : undefined,
+          image_index: s.image_index !== undefined ? Number(s.image_index) : undefined,
         })),
         callToAction: parsed.callToAction || parsed.cta || "Theo dõi kênh để không bỏ lỡ!",
       };

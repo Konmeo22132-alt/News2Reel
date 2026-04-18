@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Twitter Card — Xuồng Iran tấn công tàu dầu</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    * { font-family: 'Inter', -apple-system, sans-serif; box-sizing: border-box; }
+
+    /* ── Page: simulates dark video frame background ── */
+    body {
+      background: radial-gradient(ellipse at 30% 20%, #1a0505 0%, #050510 50%, #0a0005 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      margin: 0;
+    }
+
+    /* ── Main card ── */
+    .card {
+      width: 900px;
+      background: #16181c;
+      border: 1px solid #2f3336;
+      border-radius: 20px;
+      padding: 28px;
+      color: #e7e9ea;
+      position: relative;
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.04),
+        0 32px 90px rgba(0,0,0,0.9),
+        0 4px 24px rgba(200,50,50,0.08);
+    }
+
+    /* Gradient top border — red for war/conflict story */
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 20px; right: 20px;
+      height: 2.5px;
+      background: linear-gradient(90deg, #ff4545, #ff8c00, #ff4545);
+      border-radius: 2px;
+    }
+
+    .avatar {
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #ff4545 0%, #c00020 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; font-weight: 900;
+      color: white;
+      flex-shrink: 0;
+      box-shadow: 0 0 0 2px #2f3336, 0 0 16px rgba(255,69,69,0.3);
+    }
+
+    .verified-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 18px; height: 18px;
+      background: #1d9bf0;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .breaking-pill {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: rgba(255, 69, 69, 0.15);
+      border: 1px solid rgba(255, 69, 69, 0.5);
+      color: #ff6b6b;
+      font-size: 11.5px;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 5px 12px;
+      border-radius: 999px;
+      margin-bottom: 16px;
+    }
+
+    .dot-live {
+      width: 7px; height: 7px;
+      background: #ff4545;
+      border-radius: 50%;
+      animation: livepulse 1s infinite;
+      box-shadow: 0 0 6px #ff4545;
+    }
+
+    @keyframes livepulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .tweet-body {
+      font-size: 19px;
+      line-height: 1.6;
+      color: #e7e9ea;
+      margin-top: 16px;
+      letter-spacing: -0.01em;
+    }
+
+    .hl-red  { color: #ff6b6b; font-weight: 700; }
+    .hl-gold { color: #ffd700; font-weight: 700; }
+    .hl-blue { color: #60b4ff; font-weight: 700; }
+
+    .fact-row {
+      display: flex; gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    .fact-chip {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      padding: 9px 14px;
+      font-size: 14.5px;
+      color: #d0d0d0;
+      line-height: 1.4;
+      display: flex; align-items: flex-start; gap: 8px;
+      flex: 1; min-width: 240px;
+    }
+
+    .fact-chip-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+
+    .news-ref {
+      margin-top: 14px;
+      border: 1px solid rgba(255, 69, 69, 0.25);
+      border-radius: 14px;
+      overflow: hidden;
+      display: flex;
+      background: rgba(255,69,69,0.06);
+    }
+
+    .news-ref-bar { width: 3px; background: linear-gradient(180deg, #ff4545, #ff8c00); flex-shrink: 0; }
+    .news-ref-body { padding: 12px 14px; }
+    .news-ref-src { font-size: 11.5px; color: #71767b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 3px; }
+    .news-ref-title { font-size: 15px; font-weight: 700; color: #e7e9ea; line-height: 1.4; }
+
+    .stats-bar {
+      display: flex; align-items: center;
+      padding-top: 14px; margin-top: 16px;
+      border-top: 1px solid #2f3336;
+      gap: 2px;
+    }
+
+    .stat {
+      display: flex; align-items: center; gap: 5px;
+      color: #71767b; font-size: 13.5px; font-weight: 500;
+      padding: 6px 10px; border-radius: 999px;
+      transition: background 0.2s, color 0.2s;
+      cursor: default;
+    }
+    .stat:hover { background: rgba(29,155,240,0.1); color: #1d9bf0; }
+    .stat svg { width: 17px; height: 17px; }
+    .stat-n { font-weight: 700; }
+
+    .x-logo { position: absolute; top: 24px; right: 24px; opacity: 0.18; }
+  </style>
+</head>
+<body>
+
+<div class="card">
+
+  <!-- X Logo watermark -->
+  <svg class="x-logo" width="28" height="28" viewBox="0 0 300 300" fill="white">
+    <path d="M178.57 127.15 290.27 0h-26.46l-97.03 110.38L89.34 0H0l117.13 166.93L0 300.25h26.46l102.4-116.59 81.8 116.59h89.34M36.01 19.54H76.66l187.13 262.13h-40.66"/>
+  </svg>
+
+  <!-- Breaking pill -->
+  <div class="breaking-pill">
+    <div class="dot-live"></div>
+    ĐANG CẬP NHẬT · XUNG ĐỘT QUÂN SỰ
+  </div>
+
+  <!-- Author row -->
+  <div style="display:flex; align-items:center; gap:14px;">
+    <div class="avatar">⚡</div>
+    <div style="flex:1;">
+      <div style="font-size:16.5px; font-weight:800; color:#e7e9ea; display:flex; align-items:center; gap:5px; line-height:1.1;">
+        Tin Tức Nóng 24H
+        <div class="verified-badge">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="white"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+        </div>
+      </div>
+      <div style="font-size:13.5px; color:#71767b; margin-top:3px;">@tintucnong24h · 47 phút trước</div>
+    </div>
+  </div>
+
+  <!-- Tweet body -->
+  <div class="tweet-body">
+    🚨 <span class="hl-red">XUỒNG CHIẾN ĐẤU IRAN</span> vừa nổ súng tấn công
+    <span class="hl-gold">tàu chở dầu</span> ngay tại eo biển
+    <span class="hl-blue">Hormuz</span> — tuyến đường vận chuyển
+    <span class="hl-gold">20% dầu mỏ toàn cầu</span>.
+
+    Tehran đã chính thức tuyên bố <span class="hl-red">tái kiểm soát tuyến hàng hải</span>
+    sau khi Mỹ đe dọa phong tỏa. Leo thang nguy hiểm nhất trong nhiều năm qua. 💥
+  </div>
+
+  <!-- Fact chips -->
+  <div class="fact-row">
+    <div class="fact-chip">
+      <span class="fact-chip-icon">🛥️</span>
+      <span>Xuồng vệ binh Cách mạng Iran <b style="color:#ff6b6b;">nổ súng trực tiếp</b> vào tàu dân sự chở dầu</span>
+    </div>
+    <div class="fact-chip">
+      <span class="fact-chip-icon">🌊</span>
+      <span>Eo Hormuz: <b style="color:#ffd700;">20% dầu thế giới</b> đi qua đây mỗi ngày — 21 triệu thùng</span>
+    </div>
+    <div class="fact-chip">
+      <span class="fact-chip-icon">📈</span>
+      <span>Giá dầu Brent <b style="color:#ff6b6b;">tăng ngay lập tức</b> sau tin tức — thị trường hỗn loạn</span>
+    </div>
+    <div class="fact-chip">
+      <span class="fact-chip-icon">🇺🇸</span>
+      <span>Mỹ đã điều USS <b style="color:#60b4ff;">Harry Truman</b> & hạm đội đến Vịnh Persian chờ sẵn</span>
+    </div>
+  </div>
+
+  <!-- Source link -->
+  <div class="news-ref">
+    <div class="news-ref-bar"></div>
+    <div class="news-ref-body">
+      <div class="news-ref-src">🗞 VnExpress · Thế giới · Quân sự</div>
+      <div class="news-ref-title">Xuồng Iran tấn công tàu dầu ở eo biển Hormuz</div>
+    </div>
+  </div>
+
+  <!-- Stats bar -->
+  <div class="stats-bar">
+    <!-- Comments -->
+    <div class="stat">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M1.751 10c0-4.42 3.584-8 8.005-8h4.366c4.49 0 7.879 3.77 7.879 8.051 0 4.48-3.522 8.049-7.879 8.049H7.21c-.898 0-1.447-.273-1.907-.67l-3.055 1.667a.75.75 0 01-1.097-.66V10zm8.005-6C6.22 4 3.5 6.656 3.5 10v8.442l1.862-1.017a.75.75 0 01.756.022c.431.28.747.43 1.092.43h6.892c3.397 0 6.379-2.845 6.379-6.549 0-3.63-2.914-6.551-6.379-6.551H9.756z"/></svg>
+      <span class="stat-n">8.2K</span>
+    </div>
+    <!-- Retweet -->
+    <div class="stat">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4.5 3.88l4.432 4.14-1.364 1.46L5.5 7.55V16c0 1.1.896 2 2 2H13v2H7.5c-2.209 0-4-1.79-4-4V7.55L1.432 9.48.068 8.02 4.5 3.88zM16.5 6H11V4h5.5c2.209 0 4 1.79 4 4v8.45l2.068-1.93 1.364 1.46-4.432 4.14-4.432-4.14 1.364-1.46 2.068 1.93V8c0-1.1-.896-2-2-2z"/></svg>
+      <span class="stat-n">34.1K</span>
+    </div>
+    <!-- Like -->
+    <div class="stat" style="color:#f91880;">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.697 5.5c-1.222-.06-2.679.51-3.89 2.16l-.805 1.09-.806-1.09C9.984 6.01 8.526 5.44 7.304 5.5c-1.243.07-2.349.78-2.91 1.91-.552 1.12-.633 2.78.479 4.82 1.074 1.97 3.257 4.27 7.129 6.61 3.87-2.34 6.052-4.64 7.126-6.61 1.111-2.04 1.03-3.7.477-4.82-.561-1.13-1.666-1.84-2.908-1.91zm4.187 7.69c-1.351 2.48-4.001 5.12-8.379 7.67l-.503.3-.504-.3c-4.379-2.55-7.029-5.19-8.382-7.67-1.36-2.5-1.41-4.86-.514-6.67.887-1.79 2.647-2.91 4.601-3.01 1.651-.09 3.368.56 4.798 2.01 1.429-1.45 3.146-2.1 4.796-2.01 1.954.1 3.714 1.22 4.601 3.01.896 1.81.846 4.17-.514 6.67z"/></svg>
+      <span class="stat-n" style="color:#f91880;">92.5K</span>
+    </div>
+    <!-- Views -->
+    <div class="stat" style="margin-left:auto;">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.75 21V3h2v18h-2zM18 21V8.5h2V21h-2zM4 21l.004-10h2L6 21H4zm9.248 0v-7h2v7h-2z"/></svg>
+      <span class="stat-n">5.8M lượt xem</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

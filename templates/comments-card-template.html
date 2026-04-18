@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Comments Card</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    * { font-family: 'Inter', -apple-system, sans-serif; box-sizing: border-box; }
+    body { background: transparent; margin: 0; padding: 20px; width: var(--card-width, 1040px); }
+
+    .panel {
+      background: #18191d;
+      border: 1px solid #2a2d35;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 28px 80px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.04);
+    }
+    .panel-header {
+      background: linear-gradient(135deg, #1c1f27, #21242e);
+      border-bottom: 1px solid #2a2d35;
+      padding: 15px 22px;
+      display: flex; align-items: center; gap: 11px;
+    }
+    .vnex-icon {
+      width: 30px; height: 30px; background: #e61c24;
+      border-radius: 7px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 900; color: white;
+      flex-shrink: 0;
+    }
+    .count-badge {
+      margin-left: auto;
+      background: rgba(230,28,36,0.15);
+      border: 1px solid rgba(230,28,36,0.35);
+      color: #ff6b6b;
+      font-size: 11.5px; font-weight: 700;
+      padding: 3px 10px; border-radius: 999px;
+    }
+
+    .comment {
+      padding: 15px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      display: flex; gap: 12px; align-items: flex-start;
+    }
+    .comment:last-of-type { border-bottom: none; }
+    .comment.featured {
+      background: rgba(29,155,240,0.06);
+      border-left: 3px solid #1d9bf0;
+    }
+    .av {
+      width: 40px; height: 40px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; font-weight: 800; color: white;
+      flex-shrink: 0;
+    }
+    .c-name { font-size: 13.5px; font-weight: 700; color: #cbd5e1; }
+    .c-loc {
+      font-size: 11.5px; color: #6b7280;
+      background: rgba(255,255,255,0.05);
+      padding: 2px 8px; border-radius: 999px;
+    }
+    .c-time { font-size: 11.5px; color: #6b7280; margin-left: auto; }
+    .c-text { font-size: 15px; line-height: 1.55; color: #d1d5db; margin-top: 5px; }
+    .c-text em { font-style: normal; color: #fbbf24; font-weight: 600; }
+    .c-text strong { color: #e7e9ea; font-weight: 700; }
+    .c-actions { display:flex; align-items:center; gap:12px; margin-top:9px; }
+    .c-like { display:flex; align-items:center; gap:4px; font-size:12.5px; color:#71767b; }
+    .c-like.liked { color: #3b82f6; }
+    .c-like svg { width: 14px; height: 14px; }
+    .c-reply { font-size: 12.5px; color: #6b7280; }
+
+    .narrator-bar {
+      background: linear-gradient(135deg, rgba(29,155,240,0.11), rgba(120,86,255,0.11));
+      border-top: 1px solid rgba(29,155,240,0.2);
+      padding: 14px 20px;
+      display: flex; gap: 11px; align-items: flex-start;
+    }
+    .narrator-icon {
+      width: 34px; height: 34px;
+      background: linear-gradient(135deg, #1d9bf0, #7856ff);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; flex-shrink: 0;
+    }
+    .narrator-label { font-size: 10.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #1d9bf0; margin-bottom: 4px; }
+    .narrator-text  { font-size: 14px; line-height: 1.55; color: #94a3b8; font-style: italic; }
+  </style>
+</head>
+<body>
+{{CSS_VARS}}
+<div class="panel">
+
+  <div class="panel-header">
+    <div class="vnex-icon">VN</div>
+    <div>
+      <div style="font-size:14px;font-weight:700;color:#e7e9ea;">Bình luận độc giả · VnExpress</div>
+      <div style="font-size:12px;color:#6b7280;margin-top:2px;">{{ARTICLE_TITLE_SHORT}}</div>
+    </div>
+    <div class="count-badge">{{COMMENT_COUNT}} bình luận</div>
+  </div>
+
+  {{COMMENTS_HTML}}
+
+  <div class="narrator-bar">
+    <div class="narrator-icon">🎙️</div>
+    <div>
+      <div class="narrator-label">🔍 Góc nhìn · Phân tích</div>
+      <div class="narrator-text">{{NARRATOR_TEXT}}</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

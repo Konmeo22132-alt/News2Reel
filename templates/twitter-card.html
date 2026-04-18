@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Twitter Card Overlay</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    * { font-family: 'Inter', -apple-system, sans-serif; box-sizing: border-box; }
+    body { background: transparent; margin: 0; padding: 0; }
+
+    .card {
+      width: 900px;
+      background: #16181c;
+      border: 1px solid #2f3336;
+      border-radius: 20px;
+      padding: 28px;
+      color: #e7e9ea;
+      position: relative;
+      /* Subtle glow to make it pop on video background */
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.04),
+        0 24px 80px rgba(0,0,0,0.85),
+        0 4px 20px rgba(0,0,0,0.6);
+    }
+
+    /* Thin accent top border — X brand blue */
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 28px; right: 28px;
+      height: 2px;
+      background: linear-gradient(90deg, #1d9bf0, #7856ff, #1d9bf0);
+      border-radius: 2px;
+      opacity: 0.6;
+    }
+
+    .avatar {
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #1d9bf0 0%, #7856ff 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; font-weight: 800;
+      color: white;
+      flex-shrink: 0;
+      border: 2px solid #2f3336;
+    }
+
+    .verified-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 20px; height: 20px;
+      background: #1d9bf0;
+      border-radius: 50%;
+      margin-left: 4px;
+      flex-shrink: 0;
+    }
+
+    .display-name {
+      font-size: 17px;
+      font-weight: 700;
+      color: #e7e9ea;
+      line-height: 1;
+      display: flex; align-items: center; gap: 4px;
+    }
+
+    .handle {
+      font-size: 15px;
+      color: #71767b;
+      margin-top: 2px;
+    }
+
+    .tweet-body {
+      font-size: 20px;
+      line-height: 1.55;
+      color: #e7e9ea;
+      margin-top: 16px;
+      /* Slight letter spacing for readability */
+      letter-spacing: -0.01em;
+    }
+
+    .tweet-body .highlight {
+      color: #1d9bf0;
+      font-weight: 600;
+    }
+
+    .bullet-item {
+      display: flex; align-items: flex-start; gap: 12px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 16px;
+      line-height: 1.45;
+      color: #d4d4d4;
+      backdrop-filter: blur(4px);
+    }
+
+    .bullet-item + .bullet-item { margin-top: 8px; }
+
+    .stats-bar {
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid #2f3336;
+    }
+
+    .stat {
+      display: flex; align-items: center; gap: 6px;
+      color: #71767b;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 6px 12px;
+      border-radius: 999px;
+      cursor: default;
+      transition: background 0.2s;
+    }
+
+    .stat:hover { background: rgba(29,155,240,0.1); color: #1d9bf0; }
+
+    .stat-icon {
+      width: 18px; height: 18px;
+      opacity: 0.8;
+    }
+
+    .stat-count { font-weight: 600; }
+
+    .x-logo {
+      position: absolute;
+      top: 24px; right: 24px;
+      opacity: 0.25;
+    }
+
+    .breaking-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #ff4545;
+      color: white;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 6px;
+      margin-bottom: 14px;
+    }
+
+    .breaking-dot {
+      width: 7px; height: 7px;
+      background: white;
+      border-radius: 50%;
+      animation: pulse 1.2s infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.8); }
+    }
+
+    .news-link-card {
+      margin-top: 16px;
+      border: 1px solid #2f3336;
+      border-radius: 14px;
+      overflow: hidden;
+      display: flex;
+      align-items: stretch;
+      background: #1e2025;
+    }
+
+    .news-link-accent {
+      width: 4px;
+      background: linear-gradient(180deg, #ff4545, #ff8c00);
+      flex-shrink: 0;
+    }
+
+    .news-link-body {
+      padding: 12px 14px;
+      flex: 1;
+    }
+
+    .news-link-source {
+      font-size: 12px;
+      color: #71767b;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+
+    .news-link-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #e7e9ea;
+      line-height: 1.35;
+    }
+  </style>
+</head>
+<body>
+<div class="card">
+
+  <!-- X Logo watermark -->
+  <svg class="x-logo" width="32" height="32" viewBox="0 0 300 300" fill="white" xmlns="http://www.w3.org/2000/svg">
+    <path d="M178.57 127.15 290.27 0h-26.46l-97.03 110.38L89.34 0H0l117.13 166.93L0 300.25h26.46l102.4-116.59 81.8 116.59h89.34M36.01 19.54H76.66l187.13 262.13h-40.66"/>
+  </svg>
+
+  <!-- Breaking badge -->
+  <div class="breaking-badge">
+    <div class="breaking-dot"></div>
+    BREAKING NEWS
+  </div>
+
+  <!-- Author row -->
+  <div style="display: flex; align-items: center; gap: 14px;">
+    <div class="avatar">{{AVATAR_LETTER}}</div>
+    <div style="flex:1; min-width:0;">
+      <div class="display-name">
+        {{DISPLAY_NAME}}
+        <!-- Verified checkmark SVG -->
+        <div class="verified-badge">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+          </svg>
+        </div>
+      </div>
+      <div class="handle">{{HANDLE}} · {{TIMESTAMP}}</div>
+    </div>
+  </div>
+
+  <!-- Tweet body -->
+  <div class="tweet-body">
+    {{TWEET_BODY}}
+  </div>
+
+  <!-- Bullet points -->
+  <div style="margin-top: 14px;">
+    {{BULLET_ITEMS}}
+  </div>
+
+  <!-- Linked article card -->
+  <div class="news-link-card">
+    <div class="news-link-accent"></div>
+    <div class="news-link-body">
+      <div class="news-link-source">🗞 VnExpress · Bất động sản</div>
+      <div class="news-link-title">TP.HCM xem xét bán 33 khu đất vàng để trả nợ dự án BT</div>
+    </div>
+  </div>
+
+  <!-- Stats bar -->
+  <div class="stats-bar">
+    <!-- Comment -->
+    <div class="stat">
+      <svg class="stat-icon" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M1.751 10c0-4.42 3.584-8 8.005-8h4.366c4.49 0 7.879 3.77 7.879 8.051 0 4.48-3.522 8.049-7.879 8.049H7.21c-.898 0-1.447-.273-1.907-.67l-3.055 1.667a.75.75 0 01-1.097-.66V10zm8.005-6C6.22 4 3.5 6.656 3.5 10v8.442l1.862-1.017a.75.75 0 01.756.022c.431.28.747.43 1.092.43h6.892c3.397 0 6.379-2.845 6.379-6.549 0-3.63-2.914-6.551-6.379-6.551H9.756z"/>
+      </svg>
+      <span class="stat-count">{{STAT_COMMENTS}}</span>
+    </div>
+
+    <!-- Retweet -->
+    <div class="stat">
+      <svg class="stat-icon" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M4.5 3.88l4.432 4.14-1.364 1.46L5.5 7.55V16c0 1.1.896 2 2 2H13v2H7.5c-2.209 0-4-1.79-4-4V7.55L1.432 9.48.068 8.02 4.5 3.88zM16.5 6H11V4h5.5c2.209 0 4 1.79 4 4v8.45l2.068-1.93 1.364 1.46-4.432 4.14-4.432-4.14 1.364-1.46 2.068 1.93V8c0-1.1-.896-2-2-2z"/>
+      </svg>
+      <span class="stat-count">{{STAT_RETWEETS}}</span>
+    </div>
+
+    <!-- Like -->
+    <div class="stat" style="color: #f91880;">
+      <svg class="stat-icon" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M16.697 5.5c-1.222-.06-2.679.51-3.89 2.16l-.805 1.09-.806-1.09C9.984 6.01 8.526 5.44 7.304 5.5c-1.243.07-2.349.78-2.91 1.91-.552 1.12-.633 2.78.479 4.82 1.074 1.97 3.257 4.27 7.129 6.61 3.87-2.34 6.052-4.64 7.126-6.61 1.111-2.04 1.03-3.7.477-4.82-.561-1.13-1.666-1.84-2.908-1.91zm4.187 7.69c-1.351 2.48-4.001 5.12-8.379 7.67l-.503.3-.504-.3c-4.379-2.55-7.029-5.19-8.382-7.67-1.36-2.5-1.41-4.86-.514-6.67.887-1.79 2.647-2.91 4.601-3.01 1.651-.09 3.368.56 4.798 2.01 1.429-1.45 3.146-2.1 4.796-2.01 1.954.1 3.714 1.22 4.601 3.01.896 1.81.846 4.17-.514 6.67z"/>
+      </svg>
+      <span class="stat-count">{{STAT_LIKES}}</span>
+    </div>
+
+    <!-- Views -->
+    <div class="stat" style="margin-left: auto;">
+      <svg class="stat-icon" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M8.75 21V3h2v18h-2zM18 21V8.5h2V21h-2zM4 21l.004-10h2L6 21H4zm9.248 0v-7h2v7h-2z"/>
+      </svg>
+      <span class="stat-count">{{STAT_VIEWS}} lượt xem</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

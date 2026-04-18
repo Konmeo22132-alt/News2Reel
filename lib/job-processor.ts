@@ -8,6 +8,7 @@ import { VideoJobModel } from "./models/VideoJob";
 import { scrapeArticle } from "./scraper";
 import { generateScript } from "./ai";
 import { renderVideo } from "./video-renderer";
+import { generateSocialCards } from "./social-card-generator";
 import { publishToTikTok } from "./tiktok";
 import type { AppConfig } from "./types";
 
@@ -76,13 +77,17 @@ export async function processVideoJob(
     });
     await track(`Script: "${script.title}"`, "AI viết kịch bản", 20);
 
+    // ── STEP 2.5: Generate Social Cards HTML ─────────────────────
+    const socialCards = generateSocialCards(article, script);
+    await track("Generated social card HTML templates", "Render UI", 22);
+
     // ── STEP 3: Render ───────────────────────────────────────────
     const imgCount = article.imageUrls?.length ?? 0;
     await track(`FFmpeg render (${config.videoQuality}) — ${imgCount} ảnh bài báo...`, "Render Video", 25);
     const videoPath = await renderVideo(script, config.videoQuality, jobId, (percent, step) => {
       const overallPercent = Math.round(25 + percent * 0.65);
       track(`${step} (${percent}%)`, "Render Video", overallPercent);
-    }, article.imageUrls ?? []);
+    }, article.imageUrls ?? [], socialCards);
     await track(`Render xong: ${videoPath}`, "Render Video", 90);
 
     // ── STEP 4: TikTok (optional) ────────────────────────────────

@@ -33,7 +33,7 @@ import {
   DEFAULT_ASS_STYLE,
   saveASSFile,
 } from "./vfx-subtitle";
-import { buildSceneFilter, isSpecialSceneType } from "./vfx-builder";
+import { screenshotBatch } from "./playwright-screenshot";
 
 type FfmpegStatic = typeof import("fluent-ffmpeg");
 
@@ -100,31 +100,7 @@ async function downloadArticleImage(url: string, destPath: string): Promise<stri
   }
 }
 
-// ─── Visual config helpers ─────────────────────────────────────────────────────
-
-/**
- * Get icon overlay configuration with animated positioning.
- * Returns null if no visual should be shown.
- */
-function getVisualConfig(visualId: string, width: number, height: number): {
-  iconPath: string | null;
-  drawboxFilter: string | null;
-  hasTerminal: boolean;
-} | null {
-  const iconPath = path.join(ASSETS_DIR, `${visualId}.png`);
-
-  if (fs.existsSync(iconPath)) {
-    return { iconPath, drawboxFilter: null, hasTerminal: false };
-  }
-
-  if (visualId === "terminal" || visualId === "code_window") {
-    return { iconPath: null, drawboxFilter: null, hasTerminal: true };
-  }
-
-  return null;
-}
-
-// ─── Scene rendering with 5-layer architecture ────────────────────────────────
+// ─── Scene rendering with 3-layer architecture ────────────────────────────────
 
 async function renderScene(opts: {
   ffmpeg: FfmpegStatic;
@@ -145,11 +121,12 @@ async function renderScene(opts: {
   width: number;
   height: number;
   articleImagePath?: string | null; // downloaded article image for this scene
+  socialImagePath?: string | null;  // Playwright screenshot of social card UI
 }): Promise<void> {
   const {
-    ffmpeg, sceneIndex, totalScenes, narration, visualId, audioPath,
+    ffmpeg, sceneIndex, totalScenes, narration, audioPath,
     audioDuration, isHook, isCTA, theme, title, quality, outputPath,
-    assPath, bgmPath, width, height,
+    assPath, bgmPath, width, height, socialImagePath
   } = opts;
 
   const videoDuration = audioDuration + 0.5;
@@ -165,16 +142,7 @@ async function renderScene(opts: {
   const assContent = generateWordByWordASS(narration, audioDuration, assStyle);
   await saveASSFile(assContent, assPath);
 
-  const visual = getVisualConfig(visualId, width, height);
-  const iconPath = visual?.iconPath ?? null;
-  // hasIcon is determined AFTER checking for article image (see Layer 2 below)
-
   // ── Build filter_complex ──
-  // Input numbering:
-  //   [0:v] = color source (gradient base)
-  //   [1:a] = TTS narration audio
-  //   [2:v] = PNG icon (if exists)
-  //   [3:a] = BGM audio (if exists)
   let filterComplex = "";
 
   const hasArticleImage = !!(opts.articleImagePath && fs.existsSync(opts.articleImagePath));
@@ -183,110 +151,83 @@ async function renderScene(opts: {
   const gradFilter = generateAnimatedGradientFilter(width, height, theme.from, theme.to, videoDuration);
   filterComplex += `[0:v]${gradFilter}[bg]; `;
 
-  // ── Layer 1.5: Article image overlay (Ken Burns effect) ──
-  // When we have a real article image, use it as the MAIN visual background.
-  // Apply slow zoom-in + slight pan using scale+crop to cover the full frame.
-  // Add a semi-transparent dark overlay so subtitle stays readable.
-  const sceneTypeStr = (opts as any).scene_type as string || "normal";
-  const skipIcon = isSpecialSceneType(sceneTypeStr);
+  // ── Layer 2: Article image overlay (Ken Burns effect) ──
   let afterImageLabel = "bg";
 
   if (hasArticleImage) {
-    // Input index: icon exists already at [2:v], so article image is next
-    // But since we're removing emoji from normal scenes, article image = [2:v]
-    const imgInputIdx = 2; // article image input
-
-    // Scale to fill 1080×1920, then Ken Burns: slow zoom from 1.0 to 1.08 over scene duration
-    // Use zoompan: z='zoom+0.0008' gives ~1.08x zoom over 100 frames = 3.3s
-    // d=total frames, s=output size
+    const imgInputIdx = 1; // we'll remap inputs intelligently below, but for now we'll use a placeholder
     const totalFrames = Math.ceil(videoDuration * 30);
     const kenBurns = [
-      `[${imgInputIdx}:v]scale=${width}:${height}:force_original_aspect_ratio=increase`,
+      `[IMG_INPUT_MARKER]scale=${width}:${height}:force_original_aspect_ratio=increase`,
       `crop=${width}:${height}`,
       `zoompan=z='zoom+0.0005':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${totalFrames}:s=${width}x${height}:fps=30`,
       `setpts=PTS-STARTPTS`,
       `format=yuv420p`,
     ].join(",");
 
-    filterComplex += `[${imgInputIdx}:v]${kenBurns}[kb_img]; `;
-
-    // Blend article image over gradient bg using overlay (article image fills frame)
+    filterComplex += `${kenBurns}[kb_img]; `;
     filterComplex += `[bg][kb_img]overlay=x=0:y=0:eval=init[bg_img]; `;
-
-    // Dark semi-transparent overlay for subtitle readability
-    // Use a color source blended with multiply or just add via overlay with alpha
     filterComplex += `[bg_img]vignette=angle=PI/4:mode=progressive[bg_vign]; `;
     afterImageLabel = "bg_vign";
-  } else {
-    afterImageLabel = "bg";
   }
 
-  // ── Layer 2: Emoji icon (ONLY if no article image AND not special scene) ──
-  // With real article images, we don't need the emoji anymore.
-  const iconInputIdx = hasArticleImage ? -1 : 2; // -1 means disabled
-  const hasIcon = !hasArticleImage && !!iconPath && fs.existsSync(iconPath!) && !skipIcon;
+  // ── Layer 3: Social UI Overlay ──
+  const hasSocialImage = !!(socialImagePath && fs.existsSync(socialImagePath));
+  let beforeAssLabel = afterImageLabel;
 
-  if (hasIcon) {
-    const iconW = 200; // smaller now — just an accent, image is the hero
-    const iconH = -1;
-    const baseX = Math.floor(width / 2 - iconW / 2);
-    const baseY = Math.floor(height * 0.25);
-    filterComplex += `[${iconInputIdx}:v]scale=${iconW}:${iconH},setpts=PTS-STARTPTS[icon]; `;
-    filterComplex += `[${afterImageLabel}][icon]overlay=x=${baseX}:y='${baseY}+floor(18*sin(3*t))':eval=frame[with_icon]; `;
+  if (hasSocialImage) {
+    const cardScale = `1040:-1`;
+    filterComplex += `[SOCIAL_INPUT_MARKER]scale=${cardScale},format=rgba[social_raw]; `;
+    const startY = height + 200;
+    const endY = `(H-h)/2 - 50`;
+    const anim = `min(t,0.8)/0.8`;
+    const easeOutStr = `${anim}*(2-${anim})`;
+    const yExpr = `${startY} - ${easeOutStr}*(${startY} - (${endY}))`;
+    const alphaExpr = `min(t*1.5,1)`;
+    filterComplex += `[social_raw]colorchannelmixer=aa=${alphaExpr}[social_faded]; `;
+    filterComplex += `[${beforeAssLabel}][social_faded]overlay=x=(W-w)/2:y='${yExpr}':eval=frame[with_social]; `;
+    beforeAssLabel = "with_social";
   }
 
-
-  // ── Layer 3 removed: Scene counter was debug artifact ──
-  const iconRendered = hasIcon;
-
-  // ── Layer 4: Scene-type special overlays + ASS subtitle karaoke ──
-  const baseLabel = iconRendered ? "with_icon" : afterImageLabel;
+  // ── Layer 4: ASS subtitle karaoke ──
+  const baseLabel = beforeAssLabel;
   const assEscaped = assPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\''");
 
-  // Try special scene renderer first
-  const specialFilter = buildSceneFilter(
-    opts as unknown as Record<string, unknown>,
-    baseLabel,
-    "special_out",
-    width,
-    height,
-    videoDuration
-  );
-
-  if (specialFilter) {
-    filterComplex += specialFilter + "; ";
-    filterComplex += `[special_out]ass='${assEscaped}'[out]`;
-  } else {
-    // Default: normal scene — gradient + icon + karaoke subtitle only
-    filterComplex += `[${baseLabel}]ass='${assEscaped}'[out]`;
-  }
+  filterComplex += `[${baseLabel}]ass='${assEscaped}'[out]`;
 
   return new Promise<void>((resolve, reject) => {
     const cmd = ffmpeg();
+    let currentInputIdx = 0;
 
-    // Input 0: color source (gradient base)
-    cmd.input(`color=0x000000:s=${width}x${height}:r=30:d=${videoDuration}`)
-      .inputOptions(["-f", "lavfi"]);
+    cmd.input(`color=0x000000:s=${width}x${height}:r=30:d=${videoDuration}`).inputOptions(["-f", "lavfi"]);
+    currentInputIdx++;
 
-    // Input 1: TTS narration audio
+    const audioInputIdx = currentInputIdx;
     cmd.input(audioPath);
+    currentInputIdx++;
 
-    // Input 2: Article image (preferred) or PNG icon (fallback)
     if (hasArticleImage) {
       cmd.input(opts.articleImagePath!);
-    } else if (hasIcon) {
-      cmd.input(iconPath!);
+      filterComplex = filterComplex.replace(/\[IMG_INPUT_MARKER\]/g, `[${currentInputIdx}:v]`);
+      currentInputIdx++;
     }
 
-    // Input 3 (or 2): BGM audio (if exists)
-    if (bgmPath) cmd.input(bgmPath);
+    if (hasSocialImage) {
+      cmd.input(socialImagePath!);
+      filterComplex = filterComplex.replace(/\[SOCIAL_INPUT_MARKER\]/g, `[${currentInputIdx}:v]`);
+      currentInputIdx++;
+    }
 
-    // Output
+    if (bgmPath) {
+      cmd.input(bgmPath);
+      currentInputIdx++;
+    }
+
     cmd.outputOptions([
       "-filter_complex", filterComplex,
       "-map", "[out]",
-      "-map", "1:a",               // TTS narration
-      ...(bgmPath ? ["-map", "2:a"] : []), // BGM (if available)
+      "-map", `${audioInputIdx}:a`,
+      ...(bgmPath ? ["-map", `${currentInputIdx - 1}:a`] : []),
       "-c:v", "libx264",
       "-preset", "fast",
       "-crf", crf,
@@ -300,14 +241,8 @@ async function renderScene(opts: {
     ]);
 
     cmd.output(outputPath);
-
-    cmd.on("start", (cmdLine: string) => {
-      console.log(`[FFmpeg Scene ${sceneIndex}] CMD: ${cmdLine.slice(0, 200)}`);
-    });
-
     cmd.on("end", () => resolve());
     cmd.on("error", (err: Error) => reject(new Error(`FFmpeg scene ${sceneIndex}: ${err.message}`)));
-
     cmd.run();
   });
 }
@@ -346,20 +281,13 @@ async function concatSegments(
 
 // ─── Main render function ─────────────────────────────────────────────────────
 
-/**
- * Render a full VideoScript → MP4 with all 5 Retention Boosters.
- *
- * @param script   VideoScript with hook + scenes + CTA
- * @param quality  "720p" | "1080p"
- * @param jobId    Unique job ID for output filename
- * @returns Streaming URL for Next.js
- */
 export async function renderVideo(
   script: VideoScript,
   quality: string,
   jobId: string,
   onProgress?: (percent: number, step: string) => void,
-  articleImageUrls?: string[],  // images scraped from article
+  articleImageUrls?: string[],
+  socialCards?: { twitterCardHtml: string; commentsCardHtml: string }
 ): Promise<string> {
   ensureOutputDirs();
 
@@ -381,8 +309,6 @@ export async function renderVideo(
 
   const bgmPath = getBgmPath();
 
-  // ── Pre-download article images ──
-  // Cycle through available images: hook gets [0], scenes get [i % count], CTA gets [0]
   const downloadedImages: (string | null)[] = [];
   if (articleImageUrls && articleImageUrls.length > 0) {
     onProgress?.(2, `Tải ${articleImageUrls.length} ảnh từ bài báo...`);
@@ -392,41 +318,38 @@ export async function renderVideo(
       const result = await downloadArticleImage(articleImageUrls[idx], imgPath);
       downloadedImages.push(result);
     }
-    console.log(`[Renderer] Images ready: ${downloadedImages.filter(Boolean).length}/${articleImageUrls.length}`);
+  }
+
+  let twitterCardPng: string | null = null;
+  let commentsCardPng: string | null = null;
+  if (socialCards) {
+    onProgress?.(3, "Chụp ảnh UI tương tác (Social cards)...");
+    const tPath = path.join(tempDir, "twitter.png");
+    const cPath = path.join(tempDir, "comments.png");
+    const results = await screenshotBatch([
+      { html: socialCards.twitterCardHtml, outputPath: tPath, opts: { width: 1040 } },
+      { html: socialCards.commentsCardHtml, outputPath: cPath, opts: { width: 1040 } }
+    ]);
+    twitterCardPng = results[0];
+    commentsCardPng = results[1];
   }
 
   const segmentPaths: string[] = [];
   const mp3Paths: string[] = [];
   const assPaths: string[] = [];
 
-  // ── Build all scenes: hook + scenes + CTA ──
   const allScenes = [
-    { narration: script.hook, isHook: true, isCTA: false, visualId: "rocket", scene_type: "normal" },
+    { narration: script.hook, isHook: true, isCTA: false, visualId: "rocket" },
     ...script.scenes.map((s) => ({
       narration: s.narration,
       isHook: false,
       isCTA: false,
       visualId: (s.visual_id as string) || "chip",
-      // Forward all scene-type fields
-      scene_type: s.scene_type || "normal",
-      counter_end: s.counter_end,
-      counter_label: s.counter_label,
-      counter_suffix: s.counter_suffix,
-      counter_prefix: s.counter_prefix,
-      vs_left: s.vs_left,
-      vs_right: s.vs_right,
-      vs_left_color: s.vs_left_color,
-      vs_right_color: s.vs_right_color,
-      terminal_title: s.terminal_title,
-      terminal_lines: s.terminal_lines,
-      checklist_items: s.checklist_items,
-      progress_target: s.progress_target,
-      progress_label: s.progress_label,
     })),
-    { narration: script.callToAction, isHook: false, isCTA: true, visualId: "star", scene_type: "normal" },
+    { narration: script.callToAction, isHook: false, isCTA: true, visualId: "star" },
   ];
 
-  const totalSteps = allScenes.length + 1; // scenes + concat
+  const totalSteps = allScenes.length + 1;
 
   try {
     for (let i = 0; i < allScenes.length; i++) {
@@ -440,31 +363,26 @@ export async function renderVideo(
       mp3Paths.push(mp3Path);
       assPaths.push(assPath);
 
-      // ── TTS + duration ──
       const ttsPercent = Math.round(((i * 2) / (totalSteps * 2)) * 100);
       onProgress?.(ttsPercent, `TTS cảnh ${i + 1}/${allScenes.length}`);
-      console.log(`[Renderer] Scene ${i + 1}/${allScenes.length} | Visual: ${scene.visualId} | ${scene.narration.slice(0, 40)}...`);
 
-      // Strip <keyword> tags from narration before TTS (tags are for visuals only, not voice)
+      let socialImagePathForScene: string | null = null;
+      if (i === 0 && twitterCardPng) {
+        socialImagePathForScene = twitterCardPng;
+      } else if (i === allScenes.length - 1 && commentsCardPng) {
+        socialImagePathForScene = commentsCardPng;
+      }
+
       const ttsNarration = scene.narration.replace(/<\/?keyword>/gi, "");
-
-      await textToSpeech(ttsNarration, mp3Path, {
-        voice: "vi-VN-NamMinhNeural",
-        rate: "+20%",
-      });
+      await textToSpeech(ttsNarration, mp3Path, { voice: "vi-VN-NamMinhNeural", rate: "+20%" });
       const duration = await getAudioDuration(mp3Path);
 
-      // ── Render scene ──
       const renderPercent = Math.round(((i * 2 + 1) / (totalSteps * 2)) * 100);
       onProgress?.(renderPercent, `Render cảnh ${i + 1}/${allScenes.length}`);
 
-      // ── Determine article image for this scene ──
-      // Hook/CTA use image[0], body scenes cycle through available images
       let articleImagePath: string | null = null;
       if (downloadedImages.length > 0) {
-        const imgIdx = scene.isHook || (scene as any).isCTA
-          ? 0
-          : i % downloadedImages.length;
+        const imgIdx = scene.isHook || (scene as any).isCTA ? 0 : i % downloadedImages.length;
         articleImagePath = downloadedImages[imgIdx] ?? null;
       }
 
@@ -487,38 +405,19 @@ export async function renderVideo(
         width,
         height,
         articleImagePath,
-        // Forward all scene-type fields directly
-        scene_type: (scene as any).scene_type || "normal",
-        counter_end: (scene as any).counter_end,
-        counter_label: (scene as any).counter_label,
-        counter_suffix: (scene as any).counter_suffix,
-        counter_prefix: (scene as any).counter_prefix,
-        vs_left: (scene as any).vs_left,
-        vs_right: (scene as any).vs_right,
-        vs_left_color: (scene as any).vs_left_color,
-        vs_right_color: (scene as any).vs_right_color,
-        terminal_title: (scene as any).terminal_title,
-        terminal_lines: (scene as any).terminal_lines,
-        checklist_items: (scene as any).checklist_items,
-        progress_target: (scene as any).progress_target,
-        progress_label: (scene as any).progress_label,
+        socialImagePath: socialImagePathForScene,
       } as any);
-
-      console.log(`[Renderer] ✓ Scene ${i + 1} done → ${path.basename(segPath)}`);
     }
 
-    // ── Concatenate all scenes ──
     onProgress?.(95, "Ghép cảnh thành video");
     const outputFileName = `video_${jobId}.mp4`;
     const outputPath = path.join(OUTPUT_DIR, outputFileName);
     await concatSegments(ffmpeg, segmentPaths, outputPath);
 
     onProgress?.(100, "Hoàn thành render");
-    console.log(`[Renderer] ✓ Video generated: ${outputPath}`);
     return `/api/stream/videos/${outputFileName}`;
 
   } finally {
-    // Cleanup temp files
     for (const p of [...segmentPaths, ...mp3Paths, ...assPaths]) {
       try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch { /* ignore */ }
     }
@@ -528,10 +427,6 @@ export async function renderVideo(
 
 // ─── Quick test render (single scene) ────────────────────────────────────────
 
-/**
- * Single-scene test render for debugging.
- * Use this to preview visual effects before full render.
- */
 export async function renderTestScene(
   narration: string,
   visualId: string = "laptop",
@@ -564,11 +459,6 @@ export async function renderTestScene(
 
     const iconPath = path.join(ASSETS_DIR, `${visualId}.png`);
     const hasIcon = fs.existsSync(iconPath);
-
-    // Input 0: Background (Color)
-    // Input 1: Audio
-    // Input 2: Icon (if exists)
-    // Input 3: BGM (if exists)
 
     const escapedAssPath = assPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "\\'");
     let filterComplex = `[0:v]geq=r='15+15*sin(T)':g='10+5*sin(T)':b='15+10*sin(T)',vignette=PI/4[grad]; `;
