@@ -8,6 +8,7 @@ export interface IVideoJob {
   resultUrl: string | null;
   logs: string[];
   currentStep: string;
+  progress: number;
   errorDetails: string | null;
   createdAt: Date;
   completedAt: Date | null;
@@ -23,6 +24,7 @@ const VideoJobSchema = new Schema(
     resultUrl: { type: String, default: null },
     logs: { type: [String], default: [] },
     currentStep: { type: String, default: "Đang khởi tạo" },
+    progress: { type: Number, default: 0 },
     errorDetails: { type: String, default: null },
     completedAt: { type: Date, default: null },
   },

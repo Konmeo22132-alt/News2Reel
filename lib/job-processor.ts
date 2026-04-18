@@ -31,12 +31,13 @@ async function setStatus(
   );
 }
 
-async function dbLog(jobId: string, msg: string, step?: string) {
+async function dbLog(jobId: string, msg: string, step?: string, progress?: number) {
   await connectDB();
   const updateData: any = { $push: { logs: msg } };
-  if (step) {
+  if (step || progress !== undefined) {
     if (!updateData.$set) updateData.$set = {};
-    updateData.$set.currentStep = step;
+    if (step) updateData.$set.currentStep = step;
+    if (progress !== undefined) updateData.$set.progress = progress;
   }
   await VideoJobModel.updateOne({ jobId }, updateData).catch(() => {});
 }
@@ -54,18 +55,18 @@ export async function processVideoJob(
 
     await setStatus(jobId, "processing");
 
-    const track = (msg: string, step?: string) => {
+    const track = (msg: string, step?: string, progress?: number) => {
       log(`[${jobId.slice(0, 8)}] ${msg}`);
-      return dbLog(jobId, msg, step); // fire and forget can be risky if node dies, so we return promise
+      return dbLog(jobId, msg, step, progress); // fire and forget can be risky if node dies, so we return promise
     };
 
     // ── STEP 1: Scrape ──────────────────────────────────────────
-    await track(`Đang scrape: ${sourceUrl}`, "Scrape bài viết");
+    await track(`Đang scrape: ${sourceUrl}`, "Scrape bài viết", 5);
     const article = await scrapeArticle(sourceUrl);
-    await track(`Bài: "${article.title}"`);
+    await track(`Bài: "${article.title}"`, "Scrape bài viết", 10);
 
     // ── STEP 2: AI Script ────────────────────────────────────────
-    await track(`${config.aiProvider === "groq" ? "Groq" : "Beeknoee"} AI tạo kịch bản...`, "AI viết kịch bản");
+    await track(`${config.aiProvider === "groq" ? "Groq" : "Beeknoee"} AI tạo kịch bản...`, "AI viết kịch bản", 15);
     const script = await generateScript(article, {
       apiKey: config.aiApiKey ?? config.ClaudeApiKey ?? "",
       channelGoal: config.channelGoal,
@@ -73,16 +74,20 @@ export async function processVideoJob(
       aiProvider: config.aiProvider,
       aiModel: config.aiModel,
     });
-    await track(`Script: "${script.title}"`);
+    await track(`Script: "${script.title}"`, "AI viết kịch bản", 20);
 
     // ── STEP 3: Render ───────────────────────────────────────────
-    await track(`FFmpeg render (${config.videoQuality})...`, "Render Video");
-    const videoPath = await renderVideo(script, config.videoQuality, jobId);
-    await track(`Render xong: ${videoPath}`);
+    await track(`FFmpeg render (${config.videoQuality})...`, "Render Video", 25);
+    const videoPath = await renderVideo(script, config.videoQuality, jobId, (percent, step) => {
+      // Map render progress (0-100) to overall pipeline progress (25-90)
+      const overallPercent = Math.round(25 + percent * 0.65);
+      track(`${step} (${percent}%)`, "Render Video", overallPercent);
+    });
+    await track(`Render xong: ${videoPath}`, "Render Video", 90);
 
     // ── STEP 4: TikTok (optional) ────────────────────────────────
     if (config.autoPostEnabled && config.tiktokApiKey && config.tiktokApiSecret) {
-      await track(`Đăng lên TikTok...`, "Đăng TikTok");
+      await track(`Đăng lên TikTok...`, "Đăng TikTok", 95);
       try {
         await publishToTikTok(
           videoPath,
@@ -97,7 +102,7 @@ export async function processVideoJob(
 
     // ── DONE ─────────────────────────────────────────────────────
     await setStatus(jobId, "completed", { resultUrl: videoPath });
-    await track(`✅ Hoàn thành`);
+    await track(`✅ Hoàn thành`, "Hoàn thành", 100);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log(`[${jobId.slice(0, 8)}] ❌ Lỗi: ${msg}`);

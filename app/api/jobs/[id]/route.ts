@@ -28,6 +28,7 @@ export async function GET(
         resultUrl: doc.resultUrl ?? null,
         logs: doc.logs ?? [],
         currentStep: doc.currentStep ?? "Đang khởi tạo",
+        progress: doc.progress ?? 0,
         errorDetails: doc.errorDetails ?? null,
         createdAt: doc.createdAt,
         completedAt: doc.completedAt ?? null,

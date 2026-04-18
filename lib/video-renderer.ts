@@ -291,7 +291,8 @@ async function concatSegments(
 export async function renderVideo(
   script: VideoScript,
   quality: string,
-  jobId: string
+  jobId: string,
+  onProgress?: (percent: number, step: string) => void
 ): Promise<string> {
   ensureOutputDirs();
 
@@ -329,6 +330,8 @@ export async function renderVideo(
     { narration: script.callToAction, isHook: false, isCTA: true, visualId: "star" },
   ];
 
+  const totalSteps = allScenes.length + 1; // scenes + concat
+
   try {
     for (let i = 0; i < allScenes.length; i++) {
       const scene = allScenes[i];
@@ -341,9 +344,11 @@ export async function renderVideo(
       mp3Paths.push(mp3Path);
       assPaths.push(assPath);
 
+      // ── TTS + duration ──
+      const ttsPercent = Math.round(((i * 2) / (totalSteps * 2)) * 100);
+      onProgress?.(ttsPercent, `TTS cảnh ${i + 1}/${allScenes.length}`);
       console.log(`[Renderer] Scene ${i + 1}/${allScenes.length} | Visual: ${scene.visualId} | ${scene.narration.slice(0, 40)}...`);
 
-      // ── TTS + duration ──
       await textToSpeech(scene.narration, mp3Path, {
         voice: "vi-VN-NamMinhNeural",
         rate: "+20%",
@@ -351,6 +356,9 @@ export async function renderVideo(
       const duration = await getAudioDuration(mp3Path);
 
       // ── Render scene ──
+      const renderPercent = Math.round(((i * 2 + 1) / (totalSteps * 2)) * 100);
+      onProgress?.(renderPercent, `Render cảnh ${i + 1}/${allScenes.length}`);
+
       await renderScene({
         ffmpeg,
         sceneIndex: i,
@@ -375,10 +383,12 @@ export async function renderVideo(
     }
 
     // ── Concatenate all scenes ──
+    onProgress?.(95, "Ghép cảnh thành video");
     const outputFileName = `video_${jobId}.mp4`;
     const outputPath = path.join(OUTPUT_DIR, outputFileName);
     await concatSegments(ffmpeg, segmentPaths, outputPath);
 
+    onProgress?.(100, "Hoàn thành render");
     console.log(`[Renderer] ✓ Video generated: ${outputPath}`);
     return `/api/stream/videos/${outputFileName}`;
 

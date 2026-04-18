@@ -10,6 +10,7 @@ type JobData = {
   resultUrl: string | null;
   logs: string[];
   currentStep: string;
+  progress: number;
   errorDetails: string | null;
 };
 
@@ -41,7 +42,7 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
 
     const jobId = state.jobId;
     let attempts = 0;
-    const MAX_ATTEMPTS = 120; // 6 minutes at 3s intervals
+    const MAX_ATTEMPTS = 300; // 15 minutes at 3s intervals
 
     const poll = async () => {
       attempts++;
@@ -61,7 +62,7 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
           clearInterval(pollRef.current!);
           setState({ phase: "error", message: job.errorDetails || "Pipeline thất bại." });
         } else if (job.status === "processing") {
-          setStatusText(job.currentStep ?? "Đang xử lý...");
+          setStatusText(`${job.currentStep ?? "Đang xử lý..."} — ${job.progress ?? 0}%`);
         } else {
           setStatusText("Đang chờ xử lý...");
         }
@@ -223,8 +224,21 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
                 <Loader2 className="w-5 h-5 flex-shrink-0 spin" style={{ color: "#818cf8" }} />
                 <div className="flex-1">
                   <p className="text-sm font-medium flex items-center gap-2" style={{ color: "#a5b4fc" }}>
-                    {statusText}
+                    {state.phase === "polling" && state.jobData ? state.jobData.currentStep : statusText}
+                    {state.phase === "polling" && state.jobData && (
+                      <span className="text-xs font-bold" style={{ color: "#818cf8" }}>{state.jobData.progress ?? 0}%</span>
+                    )}
                   </p>
+                  {/* Progress bar */}
+                  <div className="w-full h-1.5 rounded-full mt-2" style={{ background: "rgba(99,102,241,0.15)" }}>
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${state.phase === "polling" && state.jobData ? state.jobData.progress ?? 0 : 0}%`,
+                        background: "linear-gradient(90deg, #6366f1, #818cf8)",
+                      }}
+                    />
+                  </div>
                   <div className="flex items-center gap-2 mt-1.5 text-[11px] font-medium" style={{ color: "var(--text-muted)" }}>
                     {["Scrape bài viết", "AI viết kịch bản", "Render Video", "Đăng TikTok"].map((step, idx, arr) => {
                       const isActive = state.phase === "polling" && state.jobData?.currentStep === step;
