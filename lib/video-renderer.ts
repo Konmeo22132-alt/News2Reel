@@ -213,8 +213,9 @@ async function renderScene(opts: {
       currentInputIdx++;
     }
 
+    cmd.complexFilter(filterComplex);
+
     cmd.outputOptions([
-      "-filter_complex", filterComplex,
       "-map", "[out]",
       "-map", `${audioInputIdx}:a`,
       ...(bgmPath ? ["-map", `${currentInputIdx - 1}:a`] : []),
