@@ -129,7 +129,11 @@ export async function renderRemotionVideo(
         const total = parseInt(match[2], 10);
         if (total > 0) {
           const pct = Math.floor((current / total) * 100);
-          onProgress(35 + pct * 0.60, "Đang render React Timeline");
+          const totalBars = 20;
+          const filledBars = Math.floor((pct / 100) * totalBars);
+          const emptyBars = totalBars - filledBars;
+          const barStr = `[${"#".repeat(filledBars)}${"=".repeat(emptyBars)}] ${pct}%`;
+          onProgress(35 + pct * 0.60, `Đang render React: ${barStr}`);
         }
       }
     });
