@@ -5,43 +5,58 @@ export const KaraokeSubtitle: React.FC<{ narration: string }> = ({ narration }) 
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
 
-  // Split narration into individual words
-  const words = narration.split(" ").filter((w) => w.length > 0);
-  if (words.length === 0) return null;
+  // Smart Parser: Bóc tách <keyword>
+  const parsedWords: { text: string; isHighlight: boolean }[] = [];
+  const parts = narration.split(/(<keyword>.*?<\/keyword>)/gi);
+  
+  parts.forEach(part => {
+    if (part.toLowerCase().startsWith("<keyword>")) {
+      const content = part.replace(/<\/?keyword>/gi, "");
+      content.split(" ").filter(w => w.trim().length > 0).forEach(w => {
+        parsedWords.push({ text: w, isHighlight: true });
+      });
+    } else {
+      part.split(" ").filter(w => w.trim().length > 0).forEach(w => {
+        parsedWords.push({ text: w, isHighlight: false });
+      });
+    }
+  });
 
-  // Approximate duration of each word
-  const framesPerWord = durationInFrames / words.length;
+  if (parsedWords.length === 0) return null;
+
+  // Căn số Frame cho từng chữ dựa trên tổng độ dài thật
+  const framesPerWord = durationInFrames / parsedWords.length;
 
   return (
-    <AbsoluteFill className="p-10 flex items-end justify-center pb-40">
+    <AbsoluteFill className="p-10 flex items-end justify-center pb-32">
+      {/* 
+        Sử dụng inline-block line-height hẹp để gom cụm chữ. 
+        Không dùng flex gap nữa để chữ không bị tràn vỡ Layout HTML.
+      */}
       <div 
-        className="flex flex-wrap items-center justify-center gap-x-4 gap-y-3 max-w-[95%] text-center line-clamp-3 leading-tight" 
+        className="max-w-[95%] text-center" 
         style={{ 
             fontFamily: "'Outfit', sans-serif",
-            fontSize: '95px',
-            fontWeight: 900
+            fontSize: '92px',
+            fontWeight: 900,
+            lineHeight: '1.15' // Gum chữ khít lại
         }}>
-        {words.map((word, index) => {
+        {parsedWords.map((item, index) => {
           const wordStartFrame = index * framesPerWord;
           
-          // Crisp 2D Bounce entrance: scale from 0 to 125% to 100%
           const entranceScale = spring({
             frame: Math.max(0, frame - wordStartFrame),
             fps,
             config: { damping: 11, mass: 1, stiffness: 180 },
           });
 
-          // Highlight logic
-          const isHighlight = word.toUpperCase() === word || /\d/.test(word) || word.length > 7;
-
-          // Standard outline + heavy drop shadow for intense clarity against any image
           const outlineShadow = `
-             3px 3px 0 #000, 
-            -3px -3px 0 #000, 
-             3px -3px 0 #000, 
-            -3px 3px 0 #000,
-             0 8px 30px rgba(0,0,0,0.95),
-             0 0 25px rgba(0,0,0,0.6)
+             4px 4px 0 #000, 
+            -4px -4px 0 #000, 
+             4px -4px 0 #000, 
+            -4px 4px 0 #000,
+             0 10px 25px rgba(0,0,0,0.9),
+             0 0 15px rgba(0,0,0,0.6)
           `;
 
           const opacity = frame >= wordStartFrame ? 1 : 0;
@@ -52,14 +67,16 @@ export const KaraokeSubtitle: React.FC<{ narration: string }> = ({ narration }) 
               style={{
                 opacity,
                 transform: `scale(${entranceScale})`,
-                color: isHighlight ? '#FFD700' : '#FFFFFF', // Clean flat Gold or White
+                color: item.isHighlight ? '#FFD700' : '#FFFFFF',
                 textShadow: outlineShadow,
                 display: 'inline-block',
                 willChange: 'transform, opacity',
-                letterSpacing: '-1px'
+                letterSpacing: '-2px',
+                marginRight: '1rem', // Khoảng cách giữa các chữ
+                marginBottom: '0.5rem'
               }}
             >
-              {word}
+              {item.text}
             </span>
           );
         })}

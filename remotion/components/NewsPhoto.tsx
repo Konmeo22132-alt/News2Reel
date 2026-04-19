@@ -10,6 +10,9 @@ export const NewsPhoto: React.FC<{ imageUrl?: string }> = ({ imageUrl }) => {
     extrapolateRight: "clamp",
   });
 
+  // Slow horizontal pan from -20px to +20px
+  const translateX = interpolate(frame, [0, durationInFrames], [-20, 20]);
+
   if (!imageUrl) {
     return (
       <AbsoluteFill className="bg-gradient-to-b from-[#0a0f18] to-[#020408] flex items-center justify-center">
@@ -38,7 +41,7 @@ export const NewsPhoto: React.FC<{ imageUrl?: string }> = ({ imageUrl }) => {
         <Img 
             src={imageUrl.startsWith("http") ? imageUrl : staticFile(imageUrl)} 
             style={{ 
-                transform: `scale(${scale})`,
+                transform: `scale(${scale}) translateX(${translateX}px)`,
                 width: "100%",
                 height: "80%", // Keep central focus
                 objectFit: "contain",

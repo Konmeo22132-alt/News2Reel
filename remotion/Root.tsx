@@ -5,7 +5,7 @@ import { MainComposition } from "./components/MainComposition";
 export type ScriptScene = {
   durationInFrames?: number;
   narration: string;
-  animationType?: "SocialTweet" | "Earth3D" | "HackerTerminal" | "NewsPhoto" | string;
+  animationType?: "ImpactCallout" | "PointToPoint" | "SplitScreenVS" | "DataChart" | "WarningAlert" | "SocialTweet" | "Earth3D" | "NewsPhoto" | string;
   animationProps?: any;
   audioUrl?: string;
   imageUrl?: string;

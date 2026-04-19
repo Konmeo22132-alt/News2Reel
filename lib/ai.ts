@@ -71,17 +71,17 @@ FORMAT JSON — TRẢ VỀ CHÍNH XÁC, KHÔNG THÊM GÌ NGOÀI JSON
 ═══════════════════════════════════════════
 
 ${engine === "ffmpeg" ? `{
-  "clickbait_title": "Tiêu đề giật gân, ngắn gọn, gây tò mò tột độ (Dùng cho giao diện mxh)",
-  "fake_username": "Tên một tòa soạn uy tín hoặc bút danh Ký giả. VD: Tạp Chí Kinh Tế, TheInvestigator, Điểm Tin 24h",
-  "hook": "Câu hook GÂY SỐC, dưới 20 từ, buộc người xem tiếp tục ngay lập tức",
+  "clickbait_title": "Tiêu đề giật gân, ngắn gọn, gây tò mò tột độ",
+  "fake_username": "TheInvestigator",
+  "hook": "Câu hook GÂY SỐC, dưới 20 từ",
   "scenes": [
     {
-      "narration": "Câu kể chuyện ĐẦY ĐỦ, 25-45 từ, có <keyword>từ quan trọng</keyword>. Không liệt kê kiểu Wikipedia, hãy KỂ CHUYỆN mang tính tranh cãi hoặc bất ngờ.",
+      "narration": "Câu kể chuyện ĐẦY ĐỦ, 25-45 từ, có <keyword>từ quan trọng</keyword>.",
       "duration": 8,
       "context_image_index": 0
     }
   ],
-  "callToAction": "Lời kêu gọi chuyên nghiệp — Theo dõi để cập nhật diễn biến mới nhất"
+  "callToAction": "Theo dõi để cập nhật diễn biến mới nhất"
 }` : `{
   "clickbait_title": "Tiêu đề giật gân, ngắn gọn, gây tò mò tột độ",
   "fake_username": "TheInvestigator",
@@ -90,13 +90,16 @@ ${engine === "ffmpeg" ? `{
   "scenes": [
     {
       "durationInFrames": 120,
-      "narration": "Câu kể chuyện ĐẦY ĐỦ, 25-45 từ, bộc lộ sự thật gây shock...",
-      "animationType": "Phải chọn đúng 1 trong 3: SocialTweet, Earth3D, HackerTerminal",
+      "narration": "Câu kể có chứa <keyword>TỪ KHÓA</keyword> quan trọng. Hãy bọc <keyword> cho thứ cần nhấn mạnh.",
+      "animationType": "CHỌN 1 TRONG 5: ImpactCallout, PointToPoint, SplitScreenVS, DataChart, WarningAlert",
       "animationProps": {
-         // Dữ liệu tùy biến truyền cho Component. 
-         // Nếu SocialTweet: { "tweetText": "nội dung tweet", "likes": "14.2K", "retweets": "2.1K" }
-         // Nếu Earth3D: { "focusLocation": "tên địa danh (viết hoa)", "zoomLevel": 5.0, "dangerZone": true/false }
-         // Nếu HackerTerminal: { "commandText": "analyze_impact --target=xyz", "typingSpeed": "fast" }
+         // Dữ liệu tùy biến tủy theo Animation bạn chọn:
+         // ImpactCallout: { text: "1.400 TỶ", subtext: "Thiệt hại kinh tế" }
+         // PointToPoint: { start: "Hoa Kỳ", end: "Việt Nam", distance: "14.200 KM" }
+         // SplitScreenVS: { leftTitle: "Donald Trump", rightTitle: "Iran" }
+         // DataChart: { items: [ {label:"Mỹ", val:40}, {label:"Trung Quốc", val:80} ] }
+         // WarningAlert: { text: "CẢNH BÁO TỐI KHẨN!" }
+         // ... Tùy biến tự do phù hợp ngữ cảnh!!!
       }
     }
   ],
@@ -205,6 +208,9 @@ export async function generateScript(
         scenes: (parsed.scenes || []).map((s: Record<string, unknown>) => ({
           narration: String(s.narration || s.text || s.content || ""),
           duration: Number(s.duration) || 6,
+          durationInFrames: s.durationInFrames ? Number(s.durationInFrames) : undefined,
+          animationType: s.animationType ? String(s.animationType) : undefined,
+          animationProps: s.animationProps && typeof s.animationProps === "object" ? s.animationProps : {},
           context_image_index: s.context_image_index !== undefined ? Number(s.context_image_index) : undefined,
         })),
         callToAction: String(parsed.callToAction || parsed.cta || "Theo dõi kênh để nhận tin nóng nhất!"),

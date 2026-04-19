@@ -7,6 +7,13 @@ import { HackerTerminal } from "./HackerTerminal";
 import { NewsPhoto } from "./NewsPhoto";
 import { KaraokeSubtitle } from "./KaraokeSubtitle";
 
+// V2 Universal Animation Matrix
+import { ImpactCallout } from "./ImpactCallout";
+import { PointToPoint } from "./PointToPoint";
+import { SplitScreenVS } from "./SplitScreenVS";
+import { DataChart } from "./DataChart";
+import { WarningAlert } from "./WarningAlert";
+
 export const MainComposition: React.FC<{ script: ScriptTemplate }> = ({ script }) => {
   let frameCursor = 0;
 
@@ -32,7 +39,7 @@ export const MainComposition: React.FC<{ script: ScriptTemplate }> = ({ script }
               {/* Layer 1: Base Background/Images */}
               <NewsPhoto imageUrl={scene.imageUrl} />
               
-              {/* Layer 2: UI Overlays */}
+              {/* Layer 2: UI Overlays mapped universally to AI variables */}
               <AbsoluteFill className="flex items-center justify-center">
                 {scene.animationType === "SocialTweet" && (
                   <SocialTweet
@@ -44,12 +51,13 @@ export const MainComposition: React.FC<{ script: ScriptTemplate }> = ({ script }
                     {...scene.animationProps}
                   />
                 )}
-                {scene.animationType === "Earth3D" && (
-                  <Earth3D {...scene.animationProps} />
-                )}
-                {scene.animationType === "HackerTerminal" && (
-                  <HackerTerminal {...scene.animationProps} />
-                )}
+                {scene.animationType === "Earth3D" && <Earth3D {...scene.animationProps} />}
+                {scene.animationType === "HackerTerminal" && <HackerTerminal {...scene.animationProps} />}
+                {scene.animationType === "ImpactCallout" && <ImpactCallout {...scene.animationProps} />}
+                {scene.animationType === "PointToPoint" && <PointToPoint {...scene.animationProps} />}
+                {scene.animationType === "SplitScreenVS" && <SplitScreenVS {...scene.animationProps} />}
+                {scene.animationType === "DataChart" && <DataChart {...scene.animationProps} />}
+                {scene.animationType === "WarningAlert" && <WarningAlert {...scene.animationProps} />}
               </AbsoluteFill>
 
               {/* Layer 3: TTS Audio */}
