@@ -17,6 +17,7 @@ export type ScriptTemplate = {
   clickbait_title: string;
   fake_username: string;
   context_image_url?: string;
+  downloadedImages?: string[];
   scenes: ScriptScene[];
 };
 

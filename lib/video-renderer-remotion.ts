@@ -134,7 +134,8 @@ export async function renderRemotionVideo(
     const remotionProps = {
         script: {
             ...script,
-            scenes: finalScenesProps // Override scenes with the fully calculated payload
+            scenes: finalScenesProps,
+            downloadedImages: downloadedImages.filter(Boolean) // Provide all guaranteed local images
         }
     };
     

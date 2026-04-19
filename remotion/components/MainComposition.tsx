@@ -43,7 +43,7 @@ export const MainComposition: React.FC<{ script: ScriptTemplate }> = ({ script }
                     metadata={{
                       clickbait_title: script.clickbait_title,
                       fake_username: script.fake_username,
-                      context_image_url: script.context_image_url || ""
+                      context_image_url: (script.downloadedImages && script.downloadedImages.length > 0) ? script.downloadedImages[0] : scene.imageUrl || script.context_image_url || ""
                     }}
                     {...scene.animationProps}
                   />
