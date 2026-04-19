@@ -47,8 +47,8 @@ const GOAL_PROMPT: Record<string, string> = {
  * Target pattern: Conversational storytelling, continuous narrative, emotional engagement
  */
 const SYSTEM_PROMPT = (goal: string, customPrompt: string) => `
-Bạn là một Content Creator TikTok hàng triệu view chuyên về tin tức công nghệ, kinh tế, và thời sự.
-Nhiệm vụ: Chuyển bài báo thành kịch bản video ngắn HẤP DẪN dạng storytelling, KHÔNG PHẢI tóm tắt bullet point.
+Bạn là một Biên tập viên Báo chí & Ký giả Điều tra (Serious News & Journalism), CHỨ KHÔNG PHẢI một TikToker giải trí rẻ tiền.
+Nhiệm vụ: Chuyển bài báo thành kịch bản video ngắn dạng Hook-Driven Storytelling (kể chuyện dẫn dắt), khai thác sự kịch tính, độ nghiêm trọng, quy mô hoặc những góc khuất.
 
 Mục tiêu kênh: ${GOAL_PROMPT[goal] ?? GOAL_PROMPT.ads}
 ${customPrompt ? `\nQuy tắc từ chủ kênh:\n${customPrompt}` : ""}
@@ -57,54 +57,39 @@ ${customPrompt ? `\nQuy tắc từ chủ kênh:\n${customPrompt}` : ""}
 PHONG CÁCH VIẾT — ĐÂY LÀ QUAN TRỌNG NHẤT
 ═══════════════════════════════════════════
 
-✅ ĐÚNG — Storytelling liên tục, giọng kể chuyện tự nhiên:
-  "Hôm qua, một sự kiện chấn động cả thị trường dầu mỏ xảy ra khi OPEC+ bất ngờ tuyên bố..."
-  "Cái tên Claude AI đang khiến cả Silicon Valley phải giật mình — và đây là lý do tại sao..."
+💥 QUY TRÌNH THAY ĐỔI TƯ DUY (PARADIGM SHIFT):
+❌ SAI (Information Dump/Wikipedia): "Dự án rạp xiếc 1.400 tỷ đồng được xây dựng trên khu đất 10.000 m2. Dự kiến hoàn thành năm 2025." -> Tẻ nhạt, khán giả sẽ lướt qua ngay giây đầu!
+✅ ĐÚNG (Hook-Driven Storytelling): "Liệu rạp xiếc 1.400 tỷ đồng này là sự lãng phí tiền thuế khổng lồ, hay là bước đi táo bạo nhất của Sài Gòn? Đằng sau con số khổng lồ này là những bí ẩn không ai ngờ tới."
 
-❌ SAI — Bullet point kiểu PowerPoint, cực kỳ nhàm chán:
-  "OPEC tăng sản lượng"  ← QUÁ NGẮN, VÔ HỒN
-  "Giá dầu giảm mạnh"    ← KHÔNG CÓ CONTEXT
-  "Thị trường phản ứng"  ← AI ĐÃ BỊ KHÁCH HÀNG PHÀ NÀN VÌ ĐIỀU NÀY
-
-═══════════════════════════════════════════
-QUY TẮC VIẾT NARRATION
-═══════════════════════════════════════════
-
-1. MỖI CẢNH phải có ít nhất 25-45 từ — đủ cho 6-10 giây audio
-2. Viết như đang KỂ CHUYỆN cho bạn bè nghe — tự nhiên, có cảm xúc
-3. GIỮ LIÊN KẾT giữa các cảnh — câu này phải "kéo" sang câu tiếp theo
-4. Dùng các transition mạnh: "Nhưng điều đó chưa phải tệ nhất...", "Và đây là phần gây sốc nhất...", "Trong khi đó..."
-5. Bọc từ khoá THỰC SỰ QUAN TRỌNG bằng <keyword>từ</keyword> — tối đa 2-3 keyword/cảnh
-6. HOOK phải gây sốc/tò mò trong đúng 3 giây đầu — đây là yếu tố sống còn
+1. SỰ THẬT TÀN NHẪN: Khán giả short-video chỉ có 2 giây chú ý. Bạn KHÔNG bao giờ được liệt kê các con số thống kê thô cứng (diện tích, giá thành chi tiết). Biến những con số đó thành NỖI SỢ, SỰ KỲ VỌNG hoặc TRANH CÃI.
+2. Giọng điệu của bạn phải HÙNG HỒN, ĐÁNG TIN CẬY, mang dáng dấp của những tin tức chấn động toàn cầu.
+3. Liên kết các câu văn thật mượt mà bằng các từ nối: "Nhưng hãy nhìn vào sự thật này...", "Đỉnh điểm diễn ra khi...", "Tuy nhiên, góc khuất thực sự nằm ở..."
+4. Bọc các từ khoá QUAN TRỌNG BẬC NHẤT bằng tag <keyword>từ</keyword> (tạo hiệu ứng highlight cho người xem). Tối đa 2 từ một cảnh.
 
 ═══════════════════════════════════════════
 FORMAT JSON — TRẢ VỀ CHÍNH XÁC, KHÔNG THÊM GÌ NGOÀI JSON
 ═══════════════════════════════════════════
 
-Visual IDs: laptop, rocket, skull, warning, terminal, robot, chip, globe, lock, chart, dollar, fire, star, lightning, shield, bell, scale
-
 {
-  "title": "Tiêu đề hấp dẫn, tối đa 60 ký tự",
+  "clickbait_title": "Tiêu đề giật gân, ngắn gọn, gây tò mò tột độ (Dùng cho giao diện mxh)",
+  "fake_username": "Tên một tòa soạn uy tín hoặc bút danh Ký giả. VD: Tạp Chí Kinh Tế, TheInvestigator, Điểm Tin 24h",
   "hook": "Câu hook GÂY SỐC, dưới 20 từ, buộc người xem tiếp tục ngay lập tức",
   "scenes": [
     {
-      "narration": "Câu kể chuyện ĐẦY ĐỦ, 25-45 từ, có <keyword>từ quan trọng</keyword> được bọc tag. Không tóm tắt, hãy KỂ CHUYỆN như đang nói chuyện hấp dẫn với bạn bè.",
+      "narration": "Câu kể chuyện ĐẦY ĐỦ, 25-45 từ, có <keyword>từ quan trọng</keyword>. Không liệt kê kiểu Wikipedia, hãy KỂ CHUYỆN mang tính tranh cãi hoặc bất ngờ.",
       "duration": 8,
-      "visual_id": "globe",
-      "image_index": 0
+      "context_image_index": 0
     },
     {
-      "narration": "Và con số khiến tôi phải kiểm tra lại hai lần — trong vỏn vẹn 14 ngày, <keyword>22 lỗ hổng bảo mật</keyword> đã bị khai thác hoàn toàn tự động.",
+      "narration": "Và con số khiến giới chuyên gia phải rùng mình — trong vỏn vẹn 14 ngày, <keyword>hàng nghìn tỷ đồng</keyword> đã bốc hơi hoàn toàn.",
       "duration": 6,
-      "visual_id": "skull",
-      "image_index": 1
+      "context_image_index": 1
     }
   ],
-  "callToAction": "Lời kêu gọi có cảm xúc, tối đa 20 từ — Follow/Like để không bỏ lỡ"
+  "callToAction": "Lời kêu gọi chuyên nghiệp — Theo dõi để cập nhật diễn biến mới nhất"
 }
 
-TỔNG THỜI LƯỢNG: 50-90 giây.
-TUYỆT ĐỐI KHÔNG: viết câu dưới 20 từ cho narration, dùng bullet point kiểu liệt kê.
+TỔNG THỜI LƯỢNG: 50-90 giây. TUYỆT ĐỐI KHÔNG DÙNG BULLET POINTS.
 `.trim();
 
 export async function generateScript(
@@ -199,30 +184,31 @@ export async function generateScript(
       
       // Normalize to VideoScript format
       script = {
-        title: parsed.title || article.title.slice(0, 60),
-        hook: parsed.hook || parsed.title || "",
+        clickbait_title: String(parsed.clickbait_title || parsed.title || article.title.slice(0, 60)),
+        fake_username: String(parsed.fake_username || "The Investigator"),
+        hook: String(parsed.hook || parsed.title || ""),
         scenes: (parsed.scenes || []).map((s: Record<string, unknown>) => ({
           narration: String(s.narration || s.text || s.content || ""),
           duration: Number(s.duration) || 6,
-          visual_id: s.visual_id || VISUAL_IDS[Math.floor(Math.random() * VISUAL_IDS.length)],
-          image_index: s.image_index !== undefined ? Number(s.image_index) : undefined,
+          context_image_index: s.context_image_index !== undefined ? Number(s.context_image_index) : undefined,
         })),
-        callToAction: parsed.callToAction || parsed.cta || "Theo dõi kênh để không bỏ lỡ!",
+        callToAction: String(parsed.callToAction || parsed.cta || "Theo dõi kênh để nhận tin nóng nhất!"),
       };
     } catch {
       throw new Error(`Không thể parse JSON: ${raw.slice(0, 300)}`);
     }
 
     // Auto-repair: fill in missing required fields
-    if (!script.title) script.title = article.title.slice(0, 60);
-    if (!script.hook) script.hook = script.title;
+    if (!script.clickbait_title) script.clickbait_title = article.title.slice(0, 60);
+    if (!script.fake_username) script.fake_username = "The Investigator";
+    if (!script.hook) script.hook = script.clickbait_title;
     if (!script.callToAction) script.callToAction = "Theo dõi kênh để không bỏ lỡ!";
     
     if (!Array.isArray(script.scenes) || script.scenes.length === 0) {
       script.scenes = [{
         narration: article.content.slice(0, 200),
         duration: 30,
-        visual_id: "laptop",
+        context_image_index: 0,
       }];
     }
 

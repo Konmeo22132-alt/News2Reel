@@ -41,12 +41,13 @@ const OUTPUT_DIR = path.join(process.cwd(), "public", "videos");
 const ASSETS_DIR = path.join(process.cwd(), "public", "assets", "visuals");
 const BGM_DIR = path.join(process.cwd(), "public", "assets", "bgm");
 
-// ─── Gradient themes (dark + tech accent) ───────────────────────────────────
+const BROLL_DIR = path.join(process.cwd(), "public", "assets", "broll");
+
+// ─── Gradient themes (Elegant, serious, professional) ──────────────────────
 const GRADIENT_THEMES = [
-  { from: "#0d0d0d", to: "#2c0000" },   // Dark → Red
-  { from: "#0d0d0d", to: "#001833" },   // Dark → Blue
-  { from: "#0d0d0d", to: "#1a0033" },   // Dark → Purple
-  { from: "#0a0a0a", to: "#003300" },   // Dark → Green
+  { from: "#0f172a", to: "#020617" },   // Deep Slate → Almost Black
+  { from: "#171717", to: "#0a0a0a" },   // Charcoal → Deep Void
+  { from: "#1e1e2f", to: "#050510" },   // Midnight Blue → Abyss
 ];
 
 // ─── BGM catalog (royalty-free style tracks) ─────────────────────────────────
@@ -61,6 +62,7 @@ function ensureOutputDirs(): void {
   if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });
   if (!fs.existsSync(ASSETS_DIR)) fs.mkdirSync(ASSETS_DIR, { recursive: true });
   if (!fs.existsSync(BGM_DIR)) fs.mkdirSync(BGM_DIR, { recursive: true });
+  if (!fs.existsSync(BROLL_DIR)) fs.mkdirSync(BROLL_DIR, { recursive: true });
 }
 
 /** Find a valid BGM track or return null */
@@ -107,7 +109,6 @@ async function renderScene(opts: {
   sceneIndex: number;
   totalScenes: number;
   narration: string;
-  visualId: string;
   audioPath: string;
   audioDuration: number;
   isHook: boolean;
@@ -145,45 +146,35 @@ async function renderScene(opts: {
   // ── Build filter_complex ──
   let filterComplex = "";
 
-  const hasArticleImage = !!(opts.articleImagePath && fs.existsSync(opts.articleImagePath));
+  const brollPath = path.join(BROLL_DIR, "serious_loop.mp4");
+  const hasBroll = fs.existsSync(brollPath);
 
-  // ── Layer 1: Animated gradient background ──
-  const gradFilter = generateAnimatedGradientFilter(width, height, theme.from, theme.to, videoDuration);
-  filterComplex += `[0:v]${gradFilter}[bg]; `;
-
-  // ── Layer 2: Article image overlay (Ken Burns effect) ──
-  let afterImageLabel = "bg";
-
-  if (hasArticleImage) {
-    const imgInputIdx = 1; // we'll remap inputs intelligently below, but for now we'll use a placeholder
-    const totalFrames = Math.ceil(videoDuration * 30);
-    const kenBurns = [
-      `[IMG_INPUT_MARKER]scale=${width}:${height}:force_original_aspect_ratio=increase`,
-      `crop=${width}:${height}`,
-      `zoompan=z='zoom+0.0005':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${totalFrames}:s=${width}x${height}:fps=30`,
-      `setpts=PTS-STARTPTS`,
-      `format=yuv420p`,
-    ].join(",");
-
-    filterComplex += `${kenBurns}[kb_img]; `;
-    filterComplex += `[bg][kb_img]overlay=x=0:y=0:eval=init[bg_img]; `;
-    filterComplex += `[bg_img]vignette=angle=PI/4[bg_vign]; `;
-    afterImageLabel = "bg_vign";
+  // ── Layer 1: Background Loop or Gradient ──
+  let afterBgLabel = "bg";
+  if (hasBroll) {
+    // We expect the broll to be mapped dynamically below as [BROLL_INPUT_MARKER]
+    // Crop it to 1080x1920 center and apply a heavy boxblur
+    filterComplex += `[BROLL_INPUT_MARKER]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},boxblur=20[bg_raw]; `;
+    // Overlay a dark overlay to make it moody and professional
+    filterComplex += `color=c=black@0.65:s=${width}x${height}:r=30:d=${videoDuration}[dark_dim]; `;
+    filterComplex += `[bg_raw][dark_dim]overlay=format=auto[bg]; `;
+  } else {
+    const gradFilter = generateAnimatedGradientFilter(width, height, theme.from, theme.to, videoDuration);
+    filterComplex += `[0:v]${gradFilter}[bg]; `;
   }
 
-  // ── Layer 3: Social UI Overlay ──
+  // ── Layer 2: Social UI Overlay ──
   const hasSocialImage = !!(socialImagePath && fs.existsSync(socialImagePath));
-  let beforeAssLabel = afterImageLabel;
+  let beforeAssLabel = afterBgLabel;
 
   if (hasSocialImage) {
     const cardScale = `1040:-1`;
     filterComplex += `[SOCIAL_INPUT_MARKER]scale=${cardScale},format=rgba[social_raw]; `;
-    const startY = height + 200;
+    const startY = height;
     const endY = `(H-h)/2 - 50`;
-    const anim = `min(t,0.8)/0.8`;
-    const easeOutStr = `${anim}*(2-${anim})`;
-    const yExpr = `${startY} - ${easeOutStr}*(${startY} - (${endY}))`;
-    filterComplex += `[social_raw]fade=t=in:st=0:d=0.66:alpha=1[social_faded]; `;
+    const durIn = 1.0;
+    const yExpr = `if(lt(t,${durIn}), ${startY}, ${endY} + (${startY}-${endY})*(1-min(t/${durIn},1)))`;
+    filterComplex += `[social_raw]fade=t=in:st=0:d=${durIn}:alpha=1[social_faded]; `;
     filterComplex += `[${beforeAssLabel}][social_faded]overlay=x=(W-w)/2:y='${yExpr}':eval=frame[with_social]; `;
     beforeAssLabel = "with_social";
   }
@@ -205,9 +196,9 @@ async function renderScene(opts: {
     cmd.input(audioPath);
     currentInputIdx++;
 
-    if (hasArticleImage) {
-      cmd.input(opts.articleImagePath!);
-      filterComplex = filterComplex.replace(/\[IMG_INPUT_MARKER\]/g, `[${currentInputIdx}:v]`);
+    if (hasBroll) {
+      cmd.input(brollPath).inputOptions(["-stream_loop", "-1"]);
+      filterComplex = filterComplex.replace(/\[BROLL_INPUT_MARKER\]/g, `[${currentInputIdx}:v]`);
       currentInputIdx++;
     }
 
@@ -338,14 +329,13 @@ export async function renderVideo(
   const assPaths: string[] = [];
 
   const allScenes = [
-    { narration: script.hook, isHook: true, isCTA: false, visualId: "rocket" },
+    { narration: script.hook, isHook: true, isCTA: false },
     ...script.scenes.map((s) => ({
       narration: s.narration,
       isHook: false,
       isCTA: false,
-      visualId: (s.visual_id as string) || "chip",
     })),
-    { narration: script.callToAction, isHook: false, isCTA: true, visualId: "star" },
+    { narration: script.callToAction, isHook: false, isCTA: true },
   ];
 
   const totalSteps = allScenes.length + 1;
@@ -390,13 +380,12 @@ export async function renderVideo(
         sceneIndex: i,
         totalScenes: allScenes.length,
         narration: scene.narration,
-        visualId: scene.visualId,
         audioPath: mp3Path,
         audioDuration: duration,
         isHook: scene.isHook,
         isCTA: (scene as any).isCTA,
         theme,
-        title: script.title,
+        title: script.clickbait_title,
         quality,
         outputPath: segPath,
         assPath,

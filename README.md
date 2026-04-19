@@ -20,12 +20,11 @@ News2Reel is a production-ready, self-hosted pipeline that scrapes Vietnamese te
 - [x] **Dynamic VNExpress Comments** — Simulates realistic multi-faceted comments (Pro/Con/Analytical) with high engagement stats for the CTA screen.
 - [x] **Deterministic Theming** — Maps 7 different news categories (War, Tech, Economy, Crime, Politics, Disaster) to specific color palettes and warning badges.
 
-### Subtitle & VFX Engine (`lib/vfx-subtitle.ts`)
-- [x] **Background Article Images** — Ken Burns full-screen slow zoom-pan on the original scraped article imagery.
-- [x] **Word-by-word ASS karaoke** — each word appears timed to audio.
-- [x] **CapCut-style box highlight** — `BorderStyle=4` + `BackColour=&H99FF0055` (hot pink box behind current keyword).
-- [x] **Bouncing pop-in animation** — words scale 0% → 120% → 100% on entry via ASS `\t()` transforms.
-- [x] **Animated radial gradient** — `geq` filter with `sin(t)` color modulation creates "breathing" dark background.
+### Subtitle & Compositing Engine (`lib/video-renderer.ts`, `lib/vfx-subtitle.ts`)
+- [x] **Vertical B-Roll Loop** — Intelligently loops high-quality serious stock footage (`public/assets/broll/serious_loop.mp4`) wrapped in heavy box blur for professional scene setting.
+- [x] **Elegant Dark Fallback** — Replaces chaotic backgrounds with deep Charcoal / Midnight Blue animated gradient meshes if B-Roll is missing.
+- [x] **Smooth UI Slide-up** — Playwright social cards animate into view with cinematic easing algorithms via native FFmpeg math evaluation.
+- [x] **Word-by-word ASS karaoke** — CapCut-style box highlight (`BorderStyle=4` + `BackColour=&H99FF0055`) with each word scaling 0% → 120% → 100% on entry.
 
 ### Infrastructure
 - [x] **Admin UI** — Next.js 15 dashboard to manage jobs, config, and trigger renders.
@@ -45,17 +44,17 @@ Article URL
 lib/scraper.ts          ← Cheerio HTML parsing, extracts title + body + imagery
     │
     ▼
-lib/ai.ts               ← LLM rewrites to VideoScript JSON (pure narration focus)
+lib/ai.ts               ← LLM Hook-Driven Storytelling (Serious Journalism paradigm)
     │
     ▼
-lib/social-card-generator.ts ← Deterministically injects content into HTML/Tailwind templates
+lib/social-card-generator.ts ← Deterministically maps fake_username + context_image_index into HTML/Tailwind templates
 lib/playwright-screenshot.ts ← Renders precise transparent PNG overlays of UIs
     │
     ▼
 lib/tts.ts              ← Edge TTS → per-scene MP3 files
     │
     ▼
-lib/video-renderer.ts   ← Orchestrates FFmpeg: Ken Burns BG + Playwright overlays + ASS karaoke
+lib/video-renderer.ts   ← Orchestrates FFmpeg: Looping B-Roll BG + Cinematic Slide-up + ASS karaoke
     │
     ▼
 public/videos/video_<jobId>.mp4
@@ -88,27 +87,26 @@ Open [http://localhost:3069](http://localhost:3069) to access the admin panel.
 
 ## 🎬 Video Script JSON Schema
 
-The LLM is now purely trained to be a narrative storyteller, dropping complex legacy FFmpeg parameters.
+The LLM is now purely trained as an investigative journalist, dropping Wikipedia-style bullet points in favor of high-retention hook-driven storytelling.
 
 ```jsonc
 {
-  "title": "Claude AI Đã Biết Viết EXPLOIT?",
-  "hook": "AI vừa tự khai thác 22 lỗ hổng trong 2 tuần...",
+  "clickbait_title": "Rạp xiếc 1.400 tỷ: Sự lãng phí hay bước lùi?",
+  "fake_username": "The Investigator",
+  "hook": "Liệu rạp xiếc 1.400 tỷ đồng này là sự lãng phí tiền thuế khổng lồ?",
   "scenes": [
     {
-      "narration": "Claude đã viết <keyword>exploit</keyword> tự động. 22 lỗ hổng bị khai thác hoàn toàn tự động.",
+      "narration": "Thay vì đọc các thông số nhàm chán, chúng ta hãy nhìn vào mặt khuất mảng tối đằng sau <keyword>hàng nghìn tỷ đồng</keyword> đang được huy động này.",
       "duration": 6,
-      "visual_id": "skull",
-      "image_index": 0
+      "context_image_index": 0
     },
     {
-      "narration": "Lệnh tấn công được chạy tự động, đây là tốc độ mà con người không thể theo kịp.",
+      "narration": "Người dân ngả ngửa trước tốc độ phê duyệt, đây là con số mà không ai có thể ngờ tới.",
       "duration": 7,
-      "visual_id": "terminal",
-      "image_index": 1
+      "context_image_index": 1
     }
   ],
-  "callToAction": "Follow để cập nhật tin tức bảo mật mỗi ngày!"
+  "callToAction": "Theo dõi để không bỏ lỡ diễn biến tiếp theo!"
 }
 ```
 

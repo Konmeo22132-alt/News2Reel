@@ -28,6 +28,7 @@ export interface TwitterCardData {
   timestamp: string;
   badgeText: string;
   tweetBodyHtml: string;         // HTML allowed (spans for highlights)
+  contextImageHtml: string;      // HTML img block
   chipsHtml: string;             // pre-rendered chip HTML
   sourceLabel: string;
   sourceTitle: string;
@@ -186,11 +187,11 @@ function fakeStats(seed: string) {
 // Tweet body generation
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildTweetBody(article: ScrapedArticle, cat: ArticleCategory): string {
+function buildTweetBody(article: ScrapedArticle, script: VideoScript, cat: ArticleCategory): string {
   // Use first 200 chars of content if available, else fallback to title
-  const raw = article.content.length > 50
+  const raw = script.clickbait_title || (article.content.length > 50
     ? article.content.slice(0, 220).replace(/\s+/g, " ").trim() + "..."
-    : article.title;
+    : article.title);
 
   // Accent color class for this category
   const accent = STYLES[cat].accent;
@@ -453,6 +454,7 @@ function renderTwitterCardHtml(data: TwitterCardData, templatePath: string): str
     "{{HANDLE}}":           data.handle,
     "{{TIMESTAMP}}":        data.timestamp,
     "{{TWEET_BODY}}":       data.tweetBodyHtml,
+    "{{CONTEXT_IMAGE_HTML}}": data.contextImageHtml,
     "{{CHIPS_HTML}}":       data.chipsHtml,
     "{{SOURCE_LABEL}}":     data.sourceLabel,
     "{{SOURCE_TITLE}}":     data.sourceTitle,
@@ -557,15 +559,21 @@ export function generateSocialCards(
     featured: t.featured,
   }));
 
+  // Find the first valid context image index from scenes
+  const imgIndex = script.scenes.find(s => s.context_image_index !== undefined)?.context_image_index ?? 0;
+  const contextImageUrl = article.imageUrls[imgIndex];
+  const contextImageHtml = contextImageUrl ? `<img class="w-full aspect-video object-cover rounded-[14px] border border-[#2f3336] mt-4" src="${contextImageUrl}" />` : "";
+
   const cardSet: SocialCardSet = {
     twitterCard: {
-      displayName: account.name,
+      displayName: script.fake_username || account.name,
       handle: account.handle,
-      avatarLetter: account.letter,
+      avatarLetter: (script.fake_username || account.name).charAt(0).toUpperCase(),
       avatarGradient: style.avatarGradient,
       timestamp: `${(titleHash % 3) + 1}${["", " giờ trước", " giờ trước"][titleHash % 3]} thuộc ${["vài", "vài", "mấy"][titleHash % 3]} giờ trước`,
       badgeText: style.badge,
-      tweetBodyHtml: buildTweetBody(article, cat),
+      tweetBodyHtml: buildTweetBody(article, script, cat),
+      contextImageHtml,
       chipsHtml: buildChipsHtml(script, cat),
       sourceLabel: buildSourceLabel(article.url, cat),
       sourceTitle: article.title,

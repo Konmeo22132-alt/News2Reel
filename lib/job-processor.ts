@@ -79,7 +79,7 @@ export async function processVideoJob(
       aiProvider: config.aiProvider,
       aiModel: config.aiModel,
     });
-    await track(`Script: "${script.title}"`, "AI viết kịch bản", 20);
+    await track(`Script: "${script.clickbait_title}"`, "AI viết kịch bản", 20);
 
     // ── STEP 2.5: Generate Social Cards HTML ─────────────────────
     const socialCards = generateSocialCards(article, script);

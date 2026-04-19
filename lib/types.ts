@@ -33,28 +33,18 @@ export type ScrapedArticle = {
   imageUrls: string[];  // Article images extracted by scraper (OG + content images)
 };
 
-// Visual IDs for scene visuals (matches AI script engine)
-export const VISUAL_IDS = [
-  "laptop", "rocket", "skull", "warning", "code_window",
-  "terminal", "robot", "chip", "globe", "lock",
-  "chart", "dollar", "fire", "star", "lightning",
-  "turtle", "shield", "dna", "bell", "scale",
-] as const;
-
-export type VisualID = typeof VISUAL_IDS[number];
-
 export type VideoScript = {
-  title: string;
-  hook: string;       // First 3s attention grabber
+  clickbait_title: string;
+  fake_username: string;
+  hook: string;
   scenes: ScriptScene[];
   callToAction: string;
 };
 
 export type ScriptScene = {
-  narration: string;    // Text to display / narrate (may include <keyword> tags)
-  duration: number;     // Seconds
-  visual_id: VisualID;  // Visual identifier
-  image_index?: number;   // Which article image to use as background (0-based)
+  narration: string;
+  duration: number;
+  context_image_index?: number;
 };
 
 export type JobResult =
