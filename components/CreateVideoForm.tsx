@@ -89,6 +89,20 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
     }
   }, [state]);
 
+  // Listen to global track-job events
+  useEffect(() => {
+    const handleTrackJob = (event: Event) => {
+      const customEvent = event as CustomEvent<{ jobId: string }>;
+      const { jobId } = customEvent.detail;
+      setOpen(true);
+      setState({ phase: "polling", jobId });
+      setStatusText("Đang kết nối lại luồng theo dõi...");
+    };
+
+    window.addEventListener("track-job", handleTrackJob);
+    return () => window.removeEventListener("track-job", handleTrackJob);
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url.trim()) return;

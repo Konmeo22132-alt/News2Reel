@@ -19,17 +19,7 @@ export const metadata: Metadata = {
   title: "Dashboard",
 };
 
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; cls: string }> = {
-    completed: { label: "Hoàn thành", cls: "badge-success" },
-    processing: { label: "Đang xử lý", cls: "badge-warning" },
-    failed: { label: "Thất bại", cls: "badge-danger" },
-    pending: { label: "Chờ xử lý", cls: "badge-info" },
-  };
-  const cfg = map[status] ?? { label: status, cls: "badge-neutral" };
-  return <span className={`badge ${cfg.cls}`}>{cfg.label}</span>;
-}
-
+import TrackJobButton from "@/components/TrackJobButton";
 export default async function DashboardPage() {
   const { config, todayCompleted, recentJobs, dailyUsage } =
     await getDashboardStats();
@@ -171,7 +161,7 @@ export default async function DashboardPage() {
                         {job.sourceUrl}
                       </td>
                       <td className="px-4 py-3">
-                        <StatusBadge status={job.status} />
+                        <TrackJobButton jobId={job.id} status={job.status} />
                       </td>
                       <td className="px-4 py-3">
                         {job.resultUrl ? (
