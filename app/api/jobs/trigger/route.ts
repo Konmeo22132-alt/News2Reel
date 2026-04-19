@@ -10,6 +10,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const sourceUrl = (body?.sourceUrl ?? "").trim();
+    const engine = body?.engine === "remotion" ? "remotion" : "ffmpeg";
 
     if (!sourceUrl || !sourceUrl.startsWith("http")) {
       return NextResponse.json(
@@ -29,13 +30,10 @@ export async function POST(request: NextRequest) {
 
     await connectDB();
     const jobId = uuidv4();
-    await VideoJobModel.create({ jobId, sourceUrl, status: "pending" });
+    await VideoJobModel.create({ jobId, sourceUrl, status: "pending", engine });
 
-    // Kick off the background process directly via Promise.
-    // Since this app runs on a persistent VPS (PM2), background promises
-    // keep running perfectly without needing a network loopback fetch.
     Promise.resolve()
-      .then(() => processVideoJob(jobId, sourceUrl, config as AppConfig))
+      .then(() => processVideoJob(jobId, sourceUrl, engine, config as AppConfig))
       .catch((err) => console.error(`[Job ${jobId}] Background task failed:`, err));
 
     return NextResponse.json({ success: true, jobId, message: "Pipeline đã khởi động" });

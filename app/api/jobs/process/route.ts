@@ -27,7 +27,8 @@ export async function POST(request: NextRequest) {
     const config = await getConfig();
 
     // Run synchronously — this request stays open until pipeline finishes
-    await processVideoJob(jobId, sourceUrl, config as AppConfig);
+    // Default to remotion if not available in payload for this process isolation
+    await processVideoJob(jobId, sourceUrl, "remotion", config as AppConfig);
 
     return NextResponse.json({ success: true, jobId });
   } catch (err) {

@@ -21,7 +21,8 @@ async function main() {
     const script = await generateScript(article, {
         apiKey: process.env.AI_API_KEY || "",
         channelGoal: "war",
-        customPrompt: "Nhấn mạnh sự căng thẳng quân sự."
+        customPrompt: "Nhấn mạnh sự căng thẳng quân sự.",
+        engine: "remotion"
     });
     
     console.log("[AI Script Result]:", JSON.stringify(script, null, 2));

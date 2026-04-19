@@ -46,7 +46,7 @@ const GOAL_PROMPT: Record<string, string> = {
  * Anti-pattern to AVOID: "Mỗi câu tối đa 10-15 từ" → produces robotic bullet points
  * Target pattern: Conversational storytelling, continuous narrative, emotional engagement
  */
-const SYSTEM_PROMPT = (goal: string, customPrompt: string) => `
+const SYSTEM_PROMPT = (goal: string, customPrompt: string, engine: "ffmpeg" | "remotion") => `
 Bạn là một Biên tập viên Báo chí & Ký giả Điều tra (Serious News & Journalism), CHỨ KHÔNG PHẢI một TikToker giải trí rẻ tiền.
 Nhiệm vụ: Chuyển bài báo thành kịch bản video ngắn dạng Hook-Driven Storytelling (kể chuyện dẫn dắt), khai thác sự kịch tính, độ nghiêm trọng, quy mô hoặc những góc khuất.
 
@@ -70,7 +70,7 @@ PHONG CÁCH VIẾT — ĐÂY LÀ QUAN TRỌNG NHẤT
 FORMAT JSON — TRẢ VỀ CHÍNH XÁC, KHÔNG THÊM GÌ NGOÀI JSON
 ═══════════════════════════════════════════
 
-{
+${engine === "ffmpeg" ? `{
   "clickbait_title": "Tiêu đề giật gân, ngắn gọn, gây tò mò tột độ (Dùng cho giao diện mxh)",
   "fake_username": "Tên một tòa soạn uy tín hoặc bút danh Ký giả. VD: Tạp Chí Kinh Tế, TheInvestigator, Điểm Tin 24h",
   "hook": "Câu hook GÂY SỐC, dưới 20 từ, buộc người xem tiếp tục ngay lập tức",
@@ -79,15 +79,29 @@ FORMAT JSON — TRẢ VỀ CHÍNH XÁC, KHÔNG THÊM GÌ NGOÀI JSON
       "narration": "Câu kể chuyện ĐẦY ĐỦ, 25-45 từ, có <keyword>từ quan trọng</keyword>. Không liệt kê kiểu Wikipedia, hãy KỂ CHUYỆN mang tính tranh cãi hoặc bất ngờ.",
       "duration": 8,
       "context_image_index": 0
-    },
-    {
-      "narration": "Và con số khiến giới chuyên gia phải rùng mình — trong vỏn vẹn 14 ngày, <keyword>hàng nghìn tỷ đồng</keyword> đã bốc hơi hoàn toàn.",
-      "duration": 6,
-      "context_image_index": 1
     }
   ],
   "callToAction": "Lời kêu gọi chuyên nghiệp — Theo dõi để cập nhật diễn biến mới nhất"
-}
+}` : `{
+  "clickbait_title": "Tiêu đề giật gân, ngắn gọn, gây tò mò tột độ",
+  "fake_username": "TheInvestigator",
+  "context_image_url": "URL ảnh chính bài báo (nếu có) HOẶC để null",
+  "hook": "Câu hook GÂY SỐC dưới 20 từ",
+  "scenes": [
+    {
+      "durationInFrames": 120,
+      "narration": "Câu kể chuyện ĐẦY ĐỦ, 25-45 từ, bộc lộ sự thật gây shock...",
+      "animationType": "Phải chọn đúng 1 trong 3: SocialTweet, Earth3D, HackerTerminal",
+      "animationProps": {
+         // Dữ liệu tùy biến truyền cho Component. 
+         // Nếu SocialTweet: { "tweetText": "nội dung tweet", "likes": "14.2K", "retweets": "2.1K" }
+         // Nếu Earth3D: { "focusLocation": "tên địa danh (viết hoa)", "zoomLevel": 5.0, "dangerZone": true/false }
+         // Nếu HackerTerminal: { "commandText": "analyze_impact --target=xyz", "typingSpeed": "fast" }
+      }
+    }
+  ],
+  "callToAction": "Theo dõi để bóc trần sự thật..."
+}`}
 
 TỔNG THỜI LƯỢNG: 50-90 giây. TUYỆT ĐỐI KHÔNG DÙNG BULLET POINTS.
 `.trim();
@@ -100,6 +114,7 @@ export async function generateScript(
     customPrompt?: string | null;
     aiProvider?: string;
     aiModel?: string | null;
+    engine: "ffmpeg" | "remotion";
   }
 ): Promise<VideoScript> {
   const { apiKey, channelGoal, customPrompt } = config;
@@ -115,7 +130,7 @@ export async function generateScript(
     messages: [
       {
         role: "system",
-        content: SYSTEM_PROMPT(channelGoal, customPrompt ?? ""),
+        content: SYSTEM_PROMPT(channelGoal, customPrompt ?? "", config.engine),
       },
       {
         role: "user",

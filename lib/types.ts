@@ -36,6 +36,7 @@ export type ScrapedArticle = {
 export type VideoScript = {
   clickbait_title: string;
   fake_username: string;
+  context_image_url?: string;
   hook: string;
   scenes: ScriptScene[];
   callToAction: string;
@@ -43,8 +44,13 @@ export type VideoScript = {
 
 export type ScriptScene = {
   narration: string;
-  duration: number;
+  // FFmpeg fields
+  duration?: number;
   context_image_index?: number;
+  // Remotion fields
+  durationInFrames?: number;
+  animationType?: "SocialTweet" | "Earth3D" | "HackerTerminal";
+  animationProps?: any;
 };
 
 export type JobResult =

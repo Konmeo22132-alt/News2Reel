@@ -28,6 +28,7 @@ interface CreateVideoFormProps {
 export default function CreateVideoForm({ defaultSources = [] }: CreateVideoFormProps) {
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState("");
+  const [engine, setEngine] = useState<"ffmpeg" | "remotion">("ffmpeg");
   const [state, setState] = useState<JobState>({ phase: "idle" });
   const [statusText, setStatusText] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -97,7 +98,7 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
       const res = await fetch("/api/jobs/trigger", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sourceUrl: url.trim() }),
+        body: JSON.stringify({ sourceUrl: url.trim(), engine }),
       });
       const data = await res.json();
 
@@ -326,6 +327,24 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
                     </div>
                   </div>
                 )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>
+                  Rendering Engine
+                </label>
+                <div className="flex gap-2">
+                  <label className="flex-1 flex items-center gap-2 p-2 rounded cursor-pointer border hover:bg-gray-800/30 transition-colors"
+                    style={{ borderColor: engine === "ffmpeg" ? "var(--primary-color, #6366f1)" : "var(--border)" }}>
+                    <input type="radio" name="engine" value="ffmpeg" checked={engine === "ffmpeg"} onChange={() => setEngine("ffmpeg")} className="accent-indigo-500" />
+                    <span className="text-sm">FFmpeg (Fast)</span>
+                  </label>
+                  <label className="flex-1 flex items-center gap-2 p-2 rounded cursor-pointer border hover:bg-gray-800/30 transition-colors"
+                    style={{ borderColor: engine === "remotion" ? "var(--primary-color, #6366f1)" : "var(--border)" }}>
+                    <input type="radio" name="engine" value="remotion" checked={engine === "remotion"} onChange={() => setEngine("remotion")} className="accent-indigo-500" />
+                    <span className="text-sm">Remotion (HQ Viral)</span>
+                  </label>
+                </div>
               </div>
 
               <div className="flex gap-2">

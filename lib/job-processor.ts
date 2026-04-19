@@ -47,6 +47,7 @@ async function dbLog(jobId: string, msg: string, step?: string, progress?: numbe
 export async function processVideoJob(
   jobId: string,
   sourceUrl: string,
+  engine: "ffmpeg" | "remotion",
   config: AppConfig,
   log: (msg: string) => void = console.log
 ): Promise<void> {
@@ -78,6 +79,7 @@ export async function processVideoJob(
       customPrompt: config.customPrompt,
       aiProvider: config.aiProvider,
       aiModel: config.aiModel,
+      engine,
     });
     await track(`Script: "${script.clickbait_title}"`, "AI viết kịch bản", 20);
 
@@ -86,12 +88,23 @@ export async function processVideoJob(
     await track("Generated social card HTML templates", "Render UI", 22);
 
     // ── STEP 3: Render ───────────────────────────────────────────
-    const imgCount = article.imageUrls?.length ?? 0;
-    await track(`FFmpeg render (${config.videoQuality}) — ${imgCount} ảnh bài báo...`, "Render Video", 25);
-    const videoPath = await renderVideo(script, config.videoQuality, jobId, (percent, step) => {
-      const overallPercent = Math.round(25 + percent * 0.65);
-      track(`${step} (${percent}%)`, "Render Video", overallPercent);
-    }, article.imageUrls ?? [], socialCards);
+    let videoPath = "";
+    if (engine === "remotion") {
+      await track(`Remotion render (${config.videoQuality}) — High Quality Viral...`, "Render Video", 25);
+      const { renderRemotionVideo } = await import("./video-renderer-remotion");
+      videoPath = await renderRemotionVideo(script, config.videoQuality, jobId, (percent, step) => {
+        const overallPercent = Math.round(25 + percent * 0.65);
+        track(`${step} (${percent}%)`, "Render Video", overallPercent);
+      }, article.imageUrls ?? [], socialCards);
+    } else {
+      const imgCount = article.imageUrls?.length ?? 0;
+      await track(`FFmpeg render (${config.videoQuality}) — ${imgCount} ảnh bài báo...`, "Render Video", 25);
+      videoPath = await renderVideo(script, config.videoQuality, jobId, (percent, step) => {
+        const overallPercent = Math.round(25 + percent * 0.65);
+        track(`${step} (${percent}%)`, "Render Video", overallPercent);
+      }, article.imageUrls ?? [], socialCards);
+    }
+    
     await track(`Render xong: ${videoPath}`, "Render Video", 90);
 
     // ── STEP 4: TikTok (optional) ────────────────────────────────
