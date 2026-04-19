@@ -19,6 +19,7 @@
     "@radix-ui/react-switch": "^1.1.0",
     "@radix-ui/react-tabs": "^1.1.0",
     "@radix-ui/react-toast": "^1.2.0",
+    "@remotion/cli": "^4.0.448",
     "@types/ffmpeg-static": "^3.0.3",
     "@types/fluent-ffmpeg": "^2.1.28",
     "@types/mongoose": "^5.11.96",
@@ -35,11 +36,11 @@
     "playwright": "^1.59.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "remotion": "^4.0.448",
     "tailwind-merge": "^2.5.4",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
-    "@remotion/cli": "^4.0.448",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
@@ -48,7 +49,6 @@
     "eslint-config-next": "15.1.0",
     "postcss": "^8.4.0",
     "prisma": "^5.22.0",
-    "remotion": "^4.0.448",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.9.3"
   }
