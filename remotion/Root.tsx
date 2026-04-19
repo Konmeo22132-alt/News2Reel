@@ -27,6 +27,15 @@ export const RemotionRoot: React.FC = () => {
       <Composition
         id="AutoVideoComposition"
         component={MainComposition}
+        calculateMetadata={({ props }) => {
+          if (!props.script || !props.script.scenes) {
+            return { durationInFrames: 300 };
+          }
+          const totalFrames = props.script.scenes.reduce((acc: number, scene: ScriptScene) => {
+            return acc + (scene.durationInFrames || 150);
+          }, 0);
+          return { durationInFrames: Math.max(1, totalFrames) };
+        }}
         durationInFrames={300}
         fps={30}
         width={1080}
