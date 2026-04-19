@@ -15,11 +15,7 @@ export const MainComposition: React.FC<{ script: ScriptTemplate }> = ({ script }
       {/* Global Font Injection */}
       <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet" />
 
-      {/* Background BGM */}
-      <Audio 
-         src={staticFile("assets/bgm/tech-future.mp3")} 
-         volume={(f) => Math.max(0.08, 0.25 - (f / 1000))} 
-      />
+      {/* Background BGM intentionally removed to prevent 404 missing asset crashes */}
 
       {script.scenes.map((scene, index) => {
         const startFrame = frameCursor;
