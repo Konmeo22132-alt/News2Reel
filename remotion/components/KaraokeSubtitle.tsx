@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, spring, useCurrentFrame, useVideoConfig, interpolate } from "remotion";
+import { AbsoluteFill, spring, useCurrentFrame, useVideoConfig } from "remotion";
 
 export const KaraokeSubtitle: React.FC<{ narration: string }> = ({ narration }) => {
   const frame = useCurrentFrame();
@@ -13,29 +13,37 @@ export const KaraokeSubtitle: React.FC<{ narration: string }> = ({ narration }) 
   const framesPerWord = durationInFrames / words.length;
 
   return (
-    <AbsoluteFill className="p-8 flex items-end justify-center pb-32">
-      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 max-w-[90%] text-center line-clamp-3 leading-tight" style={{ 
-            textShadow: '0 4px 12px rgba(0,0,0,0.8), 0 0 40px rgba(0,0,0,0.6)',
-            fontSize: '85px',
-            fontWeight: 800
+    <AbsoluteFill className="p-10 flex items-end justify-center pb-40">
+      <div 
+        className="flex flex-wrap items-center justify-center gap-x-4 gap-y-3 max-w-[95%] text-center line-clamp-3 leading-tight" 
+        style={{ 
+            fontFamily: "'Outfit', sans-serif",
+            fontSize: '95px',
+            fontWeight: 900
         }}>
         {words.map((word, index) => {
-          // Determine the start frame for this specific word
           const wordStartFrame = index * framesPerWord;
           
-          // Bouncing entrance: scale from 0 to 120% to 100%
-          // Only triggers when the frame cursor reaches wordStartFrame
+          // Crisp 2D Bounce entrance: scale from 0 to 125% to 100%
           const entranceScale = spring({
             frame: Math.max(0, frame - wordStartFrame),
             fps,
-            config: { damping: 10, mass: 1, stiffness: 100 },
+            config: { damping: 11, mass: 1, stiffness: 180 },
           });
 
-          // Optional highlight logic (simulating the <keyword> replacement color)
-          // We can highlight uppercase words, numbers, or specific punctuation
+          // Highlight logic
           const isHighlight = word.toUpperCase() === word || /\d/.test(word) || word.length > 7;
 
-          // If the word hasn't appeared yet, hide it to sync with audio
+          // Standard outline + heavy drop shadow for intense clarity against any image
+          const outlineShadow = `
+             3px 3px 0 #000, 
+            -3px -3px 0 #000, 
+             3px -3px 0 #000, 
+            -3px 3px 0 #000,
+             0 8px 30px rgba(0,0,0,0.95),
+             0 0 25px rgba(0,0,0,0.6)
+          `;
+
           const opacity = frame >= wordStartFrame ? 1 : 0;
 
           return (
@@ -44,9 +52,11 @@ export const KaraokeSubtitle: React.FC<{ narration: string }> = ({ narration }) 
               style={{
                 opacity,
                 transform: `scale(${entranceScale})`,
-                color: isHighlight ? '#fcd34d' : 'white', // yellow-300 for highlights
+                color: isHighlight ? '#FFD700' : '#FFFFFF', // Clean flat Gold or White
+                textShadow: outlineShadow,
                 display: 'inline-block',
-                willChange: 'transform, opacity'
+                willChange: 'transform, opacity',
+                letterSpacing: '-1px'
               }}
             >
               {word}

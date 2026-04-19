@@ -14,10 +14,12 @@ type JobData = {
   errorDetails: string | null;
 };
 
+type SystemStats = { ramPercent: number; cpuLoad: number; etaSeconds: number; vCpus: number };
+
 type JobState =
   | { phase: "idle" }
   | { phase: "creating" }
-  | { phase: "polling"; jobId: string; jobData?: JobData }
+  | { phase: "polling"; jobId: string; jobData?: JobData; systemStats?: SystemStats }
   | { phase: "done"; resultUrl: string }
   | { phase: "error"; message: string };
 
@@ -52,8 +54,8 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
         const data = await res.json();
         const job = data.job as JobData;
 
-        // Update working state with incoming logs
-        setState((prev) => (prev.phase === "polling" ? { ...prev, jobData: job } : prev));
+        // Update working state with incoming logs and stats
+        setState((prev) => (prev.phase === "polling" ? { ...prev, jobData: job, systemStats: data.systemStats } : prev));
         
         if (job.status === "completed") {
           clearInterval(pollRef.current!);
@@ -228,7 +230,7 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
                     )}
                   </p>
                   {/* Progress bar */}
-                  <div className="w-full h-1.5 rounded-full mt-2" style={{ background: "rgba(99,102,241,0.15)" }}>
+                  <div className="w-full h-1.5 rounded-full mt-3" style={{ background: "rgba(99,102,241,0.15)" }}>
                     <div
                       className="h-full rounded-full transition-all duration-500"
                       style={{
@@ -237,7 +239,28 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
                       }}
                     />
                   </div>
-                  <div className="flex items-center gap-2 mt-1.5 text-[11px] font-medium" style={{ color: "var(--text-muted)" }}>
+                  
+                  {/* System Stats HUD */}
+                  {state.phase === "polling" && state.systemStats && state.jobData?.status === "processing" && (
+                     <div className="flex items-center gap-4 mt-3 text-[11px] font-medium opacity-80" style={{ color: "#a5b4fc" }}>
+                        <span className="flex items-center gap-1.5" title="CPU Load">
+                           <Activity className="w-3 h-3" />
+                           {state.systemStats.cpuLoad}% vCPU
+                        </span>
+                        <span className="flex items-center gap-1.5" title="RAM Usage">
+                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" /></svg>
+                           {state.systemStats.ramPercent}% RAM
+                        </span>
+                        {state.systemStats.etaSeconds > 0 && (
+                           <span className="flex items-center gap-1.5 ml-auto" title="Estimated Time">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                              ETA: {Math.floor(state.systemStats.etaSeconds / 60)}m {state.systemStats.etaSeconds % 60}s
+                           </span>
+                        )}
+                     </div>
+                  )}
+
+                  <div className="flex items-center gap-2 mt-2 text-[11px] font-medium" style={{ color: "var(--text-muted)" }}>
                     {["Scrape bài viết", "AI viết kịch bản", "Render Video", "Đăng TikTok"].map((step, idx, arr) => {
                       const isActive = state.phase === "polling" && state.jobData?.currentStep === step;
                       return (

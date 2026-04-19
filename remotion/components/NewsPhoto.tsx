@@ -5,39 +5,49 @@ export const NewsPhoto: React.FC<{ imageUrl?: string }> = ({ imageUrl }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
 
-  // Subtle Ken Burns zoom effect (1.0 to 1.1 scale)
-  const scale = interpolate(frame, [0, durationInFrames], [1, 1.15], {
+  // Smooth, precise Ken Burns zoom effect (1.0 to 1.1 scale)
+  const scale = interpolate(frame, [0, durationInFrames], [1, 1.1], {
     extrapolateRight: "clamp",
-  });
-
-  // Entrance pop
-  const entrance = spring({
-    frame,
-    fps,
-    config: { damping: 100, mass: 2 },
   });
 
   if (!imageUrl) {
     return (
-      <AbsoluteFill className="bg-gradient-to-br from-slate-900 to-black flex items-center justify-center">
-        <div className="w-full h-full opacity-30" style={{ backgroundImage: "repeating-linear-gradient(45deg, transparent, transparent 10px, #1f2937 10px, #1f2937 20px)" }} />
+      <AbsoluteFill className="bg-gradient-to-b from-[#0a0f18] to-[#020408] flex items-center justify-center">
+        <div className="w-full h-full opacity-10" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)", backgroundSize: '40px 40px' }} />
       </AbsoluteFill>
     );
   }
 
   return (
     <AbsoluteFill className="bg-black flex items-center justify-center overflow-hidden">
+        {/* Background Blur Layer to eliminate black bars for non-16:9 images */}
+        <AbsoluteFill>
+            <Img 
+                src={imageUrl.startsWith("http") ? imageUrl : `/${imageUrl}`} 
+                style={{ 
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    filter: "blur(40px) brightness(40%)",
+                    transform: `scale(1.2)`
+                }} 
+            />
+        </AbsoluteFill>
+
+        {/* Foreground Focus Layer */}
         <Img 
             src={imageUrl.startsWith("http") ? imageUrl : `/${imageUrl}`} 
             style={{ 
-                transform: `scale(${scale * entrance})`,
+                transform: `scale(${scale})`,
                 width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                opacity: 0.6
+                height: "80%", // Keep central focus
+                objectFit: "contain",
             }} 
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#020617] via-transparent to-transparent opacity-80" />
+        
+        {/* Cinematic Vignette & Bottom Mask for Text Readability */}
+        <div className="absolute inset-0" style={{ boxShadow: 'inset 0 0 150px rgba(0,0,0,0.8)' }} />
+        <div className="absolute bottom-0 w-full h-[60%] bg-gradient-to-t from-black via-black/60 to-transparent" />
     </AbsoluteFill>
   );
 };

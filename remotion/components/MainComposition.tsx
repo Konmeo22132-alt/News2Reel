@@ -11,11 +11,14 @@ export const MainComposition: React.FC<{ script: ScriptTemplate }> = ({ script }
   let frameCursor = 0;
 
   return (
-    <AbsoluteFill className="bg-[#050510] text-white font-sans overflow-hidden">
-      {/* Fallback BGM across the entire video if needed */}
+    <AbsoluteFill className="bg-[#050510] text-white overflow-hidden" style={{ fontFamily: "'Outfit', sans-serif" }}>
+      {/* Global Font Injection */}
+      <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet" />
+
+      {/* Background BGM */}
       <Audio 
          src={staticFile("assets/bgm/tech-future.mp3")} 
-         volume={(f) => Math.max(0.1, 0.3 - (f / 1000))} 
+         volume={(f) => Math.max(0.08, 0.25 - (f / 1000))} 
       />
 
       {script.scenes.map((scene, index) => {
@@ -30,12 +33,11 @@ export const MainComposition: React.FC<{ script: ScriptTemplate }> = ({ script }
             durationInFrames={duration}
           >
             <AbsoluteFill className="flex items-center justify-center">
-              
-              {/* Layer 1: Background Base & Scraped Images (Ken Burns effect) */}
+              {/* Layer 1: Base Background/Images */}
               <NewsPhoto imageUrl={scene.imageUrl} />
               
-              {/* Layer 2: Social Embeds & Special Overlays */}
-              <AbsoluteFill className="flex items-center justify-center opacity-90">
+              {/* Layer 2: UI Overlays */}
+              <AbsoluteFill className="flex items-center justify-center">
                 {scene.animationType === "SocialTweet" && (
                   <SocialTweet
                     metadata={{
@@ -54,14 +56,13 @@ export const MainComposition: React.FC<{ script: ScriptTemplate }> = ({ script }
                 )}
               </AbsoluteFill>
 
-              {/* Layer 3: Audio TTS */}
+              {/* Layer 3: TTS Audio */}
               {scene.audioUrl && (
                   <Audio src={staticFile(scene.audioUrl)} />
               )}
 
-              {/* Layer 4: Bouncing Karaoke Subtitles mapped directly to Audio length */}
+              {/* Layer 4: Karaoke Text purely driven by audio-derived duration */}
                <KaraokeSubtitle narration={scene.narration} />
-
             </AbsoluteFill>
           </Sequence>
         );
