@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, Img, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Img, interpolate, spring, useCurrentFrame, useVideoConfig, staticFile } from "remotion";
 
 export const NewsPhoto: React.FC<{ imageUrl?: string }> = ({ imageUrl }) => {
   const frame = useCurrentFrame();
@@ -23,7 +23,7 @@ export const NewsPhoto: React.FC<{ imageUrl?: string }> = ({ imageUrl }) => {
         {/* Background Blur Layer to eliminate black bars for non-16:9 images */}
         <AbsoluteFill>
             <Img 
-                src={imageUrl.startsWith("http") ? imageUrl : `/${imageUrl}`} 
+                src={imageUrl.startsWith("http") ? imageUrl : staticFile(imageUrl)} 
                 style={{ 
                     width: "100%",
                     height: "100%",
@@ -36,7 +36,7 @@ export const NewsPhoto: React.FC<{ imageUrl?: string }> = ({ imageUrl }) => {
 
         {/* Foreground Focus Layer */}
         <Img 
-            src={imageUrl.startsWith("http") ? imageUrl : `/${imageUrl}`} 
+            src={imageUrl.startsWith("http") ? imageUrl : staticFile(imageUrl)} 
             style={{ 
                 transform: `scale(${scale})`,
                 width: "100%",

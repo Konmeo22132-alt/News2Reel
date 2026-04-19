@@ -1,5 +1,5 @@
 import React from "react";
-import { Img, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { Img, spring, useCurrentFrame, useVideoConfig, staticFile } from "remotion";
 
 export const SocialTweet: React.FC<{
   metadata: { clickbait_title: string; fake_username: string; context_image_url: string };
@@ -53,7 +53,7 @@ export const SocialTweet: React.FC<{
       {/* Image Context (if available) */}
       <div className="w-full min-h-[400px] h-auto max-h-[600px] rounded-[24px] overflow-hidden mt-2 relative border border-white/10 shadow-inner bg-black/40">
         <Img
-          src={metadata.context_image_url.startsWith("http") ? metadata.context_image_url : `/${metadata.context_image_url}`}
+          src={metadata.context_image_url.startsWith("http") ? metadata.context_image_url : staticFile(metadata.context_image_url)}
           className="w-full h-full object-cover"
         />
         {/* Sleek bottom gradient for the title context */}
