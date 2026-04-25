@@ -122,18 +122,23 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
           ...(visionApiKey.trim() ? { visionApiKey: visionApiKey.trim() } : {}),
         }),
       });
-      const data = await res.json();
 
-      if (!data.success) {
-        setState({ phase: "error", message: data.error ?? "Lỗi không xác định" });
+      let data: Record<string, unknown> = {};
+      try { data = await res.json(); } catch { /* non-JSON */ }
+
+      if (!res.ok || !data.success) {
+        const serverErr = (data.error as string) ?? `HTTP ${res.status} ${res.statusText}`;
+        setState({ phase: "error", message: serverErr });
         return;
       }
 
-      setState({ phase: "polling", jobId: data.jobId });
+      setState({ phase: "polling", jobId: data.jobId as string });
       setStatusText("Job đã được tạo, pipeline đang khởi động...");
-    } catch {
-      setState({ phase: "error", message: "Không thể kết nối server" });
+    } catch (fetchErr) {
+      const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+      setState({ phase: "error", message: `Không thể kết nối server: ${msg}` });
     }
+
   };
 
   const reset = () => {

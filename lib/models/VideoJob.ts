@@ -10,7 +10,7 @@ export interface IVideoJob {
   currentStep: string;
   progress: number;
   errorDetails: string | null;
-  engine: "ffmpeg" | "remotion";
+  engine: "ffmpeg" | "remotion" | "hyperframes" | "hybrid";
   createdAt: Date;
   completedAt: Date | null;
 }
@@ -27,7 +27,7 @@ const VideoJobSchema = new Schema(
     currentStep: { type: String, default: "Đang khởi tạo" },
     progress: { type: Number, default: 0 },
     errorDetails: { type: String, default: null },
-    engine: { type: String, default: "ffmpeg", enum: ["ffmpeg", "remotion"] },
+    engine: { type: String, default: "ffmpeg", enum: ["ffmpeg", "remotion", "hyperframes", "hybrid"] },
     completedAt: { type: Date, default: null },
   },
   {

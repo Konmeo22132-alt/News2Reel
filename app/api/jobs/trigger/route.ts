@@ -54,7 +54,11 @@ export async function POST(request: NextRequest) {
       message: `Pipeline đã khởi động (${engine}${visionApiKeyOverride ? " + Vision Agent" : ""})`,
     });
   } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
     console.error("trigger error:", err);
-    return NextResponse.json({ success: false, error: "Lỗi server nội bộ" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: errMsg || "Lỗi server nội bộ" },
+      { status: 500 }
+    );
   }
 }
