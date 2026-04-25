@@ -3,11 +3,15 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 export interface IAppConfig extends Document {
   deepseekApiKey: string | null;  // legacy field, kept for backward compat
   aiProvider: string;             // "beeknoee" | "groq"
-  aiApiKey: string | null;        // API key for selected provider
-  aiModel: string | null;         // Model name override
+  aiApiKey: string | null;        // Script-writing API key
+  aiModel: string | null;         // Script-writing model
+  // Vision Agent (optional — reads images, briefs script writer)
+  visionProvider: string | null;  // "beeknoee" | "groq" | null
+  visionApiKey: string | null;    // Separate key for vision model
+  visionModel: string | null;     // Vision model (e.g. gpt-4o, claude-3-haiku)
   videoQuality: string;
   dailyVideoLimit: number;
-  newsSources: string; // JSON array string
+  newsSources: string;
   channelGoal: string;
   tiktokApiKey: string | null;
   tiktokApiSecret: string | null;
@@ -22,6 +26,9 @@ const AppConfigSchema = new Schema<IAppConfig>(
     aiProvider: { type: String, default: "beeknoee" },
     aiApiKey: { type: String, default: null },
     aiModel: { type: String, default: null },
+    visionProvider: { type: String, default: null },
+    visionApiKey: { type: String, default: null },
+    visionModel: { type: String, default: null },
     videoQuality: { type: String, default: "720p" },
     dailyVideoLimit: { type: Number, default: 10 },
     newsSources: { type: String, default: "[]" },

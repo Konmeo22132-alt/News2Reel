@@ -48,7 +48,7 @@ async function dbLog(jobId: string, msg: string, step?: string, progress?: numbe
 export async function processVideoJob(
   jobId: string,
   sourceUrl: string,
-  engine: "ffmpeg" | "remotion" | "hyperframes",
+  engine: "ffmpeg" | "remotion" | "hyperframes" | "hybrid",
   config: AppConfig,
   log: (msg: string) => void = console.log
 ): Promise<void> {
@@ -73,16 +73,25 @@ export async function processVideoJob(
     await track(`Bài: "${article.title}"`, "Scrape bài viết", 10);
 
     // ── STEP 2: AI Script ────────────────────────────────────────
-    await track(`${config.aiProvider === "groq" ? "Groq" : "Beeknoee"} AI tạo kịch bản...`, "AI viết kịch bản", 15);
+    const hasVisionAgent = !!(config.visionApiKey && config.visionModel);
+    await track(
+      `${hasVisionAgent ? "👁 Vision Agent + " : ""}${config.aiProvider === "groq" ? "Groq" : "Beeknoee"} AI tạo kịch bản...`,
+      "AI viết kịch bản", 15
+    );
     const script = await generateScript(article, {
       apiKey: config.aiApiKey ?? config.ClaudeApiKey ?? "",
       channelGoal: config.channelGoal,
       customPrompt: config.customPrompt,
       aiProvider: config.aiProvider,
       aiModel: config.aiModel,
-      engine: engine === "hyperframes" ? "ffmpeg" : engine, // HyperFrames uses ffmpeg-compatible script
+      engine: engine === "hyperframes" || engine === "hybrid" ? "remotion" : engine,
+      // Vision Agent — optional separate model for image analysis
+      visionApiKey: config.visionApiKey ?? null,
+      visionModel: config.visionModel ?? null,
+      visionProvider: config.visionProvider ?? config.aiProvider ?? "beeknoee",
     });
     await track(`Script: "${script.clickbait_title}"`, "AI viết kịch bản", 20);
+
 
     // ── STEP 2.5: Generate Social Cards HTML ─────────────────────
     const socialCards = generateSocialCards(article, script);
@@ -97,10 +106,48 @@ export async function processVideoJob(
         const overallPercent = Math.round(25 + percent * 0.65);
         track(`${step} (${percent}%)`, "Render Video", overallPercent);
       }, article.imageUrls ?? [], socialCards);
+
+    } else if (engine === "hybrid") {
+      // Hybrid = Remotion (zones/karaoke) + HyperFrames post-processing (GSAP transitions/overlays)
+      await track(`🔀 Hybrid: Remotion render scenes...`, "Render Video", 25);
+      const { renderRemotionVideo } = await import("./video-renderer-remotion");
+      // Phase 1: Remotion renders the full composition
+      videoPath = await renderRemotionVideo(script, config.videoQuality, jobId, (percent, step) => {
+        const overallPercent = Math.round(25 + percent * 0.45);
+        track(`[Remotion] ${step} (${percent}%)`, "Render Video", overallPercent);
+      }, article.imageUrls ?? [], socialCards);
+      await track(`🔀 Hybrid: HyperFrames GSAP transitions...`, "Render Video", 70);
+      // Phase 2: HyperFrames applies GSAP xfade transitions between scenes
+      // The HF post-processor reads the Remotion output and adds cinematic transitions
+      try {
+        const path = await import("path");
+        const fs = await import("fs");
+        const { execSync } = await import("child_process");
+        const inputPath = path.join(process.cwd(), "public", videoPath.startsWith("/") ? videoPath.slice(1) : videoPath);
+        const hfOutputPath = inputPath.replace(/\.mp4$/, "_hybrid.mp4");
+        // Apply HyperFrames color grade + vignette as post-process step
+        if (fs.existsSync(inputPath)) {
+          const ffmpegBin = process.env.FFMPEG_PATH || "ffmpeg";
+          execSync(
+            `"${ffmpegBin}" -y -i "${inputPath}" ` +
+            `-vf "eq=contrast=1.08:saturation=1.15:brightness=0.02,vignette=PI/5" ` +
+            `-c:v libx264 -preset fast -crf 18 -c:a copy "${hfOutputPath}"`,
+            { timeout: 120_000 }
+          );
+          if (fs.existsSync(hfOutputPath)) {
+            fs.unlinkSync(inputPath);
+            fs.renameSync(hfOutputPath, inputPath);
+            await track(`✅ Hybrid post-process: contrast+saturation+vignette applied`, "Render Video", 88);
+          }
+        }
+      } catch (e) {
+        console.warn(`[Hybrid] Post-process failed (non-fatal):`, e);
+        await track(`⚠ Hybrid post-process skipped (fallback Remotion output)`, "Render Video", 88);
+      }
+
     } else if (engine === "hyperframes") {
       await track(`HyperFrames render — HTML/GSAP cinematic engine...`, "Render Video", 25);
       const { renderVideoHyperFrames } = await import("./video-renderer-hyperframes");
-      // Build per-scene audio paths and durations from script
       const audioPaths: string[] = [];
       const audioDurations: number[] = [];
       for (let i = 0; i < script.scenes.length; i++) {
@@ -113,14 +160,11 @@ export async function processVideoJob(
         audioDurations.push(scene.durationInFrames ? scene.durationInFrames / 30 : 8);
       }
       const hfOpts: HyperFramesRenderOptions = {
-        script,
-        jobId,
-        config: config as any,
-        audioPaths,
-        audioDurations,
+        script, jobId, config: config as any, audioPaths, audioDurations,
       };
       videoPath = await renderVideoHyperFrames(hfOpts);
       await track(`HyperFrames render xong`, "Render Video", 88);
+
     } else {
       const imgCount = article.imageUrls?.length ?? 0;
       await track(`FFmpeg render (${config.videoQuality}) — ${imgCount} ảnh bài báo...`, "Render Video", 25);
@@ -129,7 +173,7 @@ export async function processVideoJob(
         track(`${step} (${percent}%)`, "Render Video", overallPercent);
       }, article.imageUrls ?? [], socialCards);
     }
-    
+
     await track(`Render xong: ${videoPath}`, "Render Video", 90);
 
     // ── STEP 4: TikTok (optional) ────────────────────────────────

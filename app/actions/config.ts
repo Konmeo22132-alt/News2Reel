@@ -23,6 +23,10 @@ export type ConfigFormData = {
   aiProvider?: string;
   aiApiKey?: string;
   aiModel?: string;
+  // Vision Agent (optional)
+  visionProvider?: string;
+  visionApiKey?: string;
+  visionModel?: string;
   videoQuality?: string;
   dailyVideoLimit?: number;
   newsSources?: string;
@@ -46,6 +50,9 @@ export async function updateConfig(
           ...(data.aiProvider !== undefined && { aiProvider: data.aiProvider }),
           ...(data.aiApiKey !== undefined && { aiApiKey: data.aiApiKey || null }),
           ...(data.aiModel !== undefined && { aiModel: data.aiModel || null }),
+          ...(data.visionProvider !== undefined && { visionProvider: data.visionProvider || null }),
+          ...(data.visionApiKey !== undefined && { visionApiKey: data.visionApiKey || null }),
+          ...(data.visionModel !== undefined && { visionModel: data.visionModel || null }),
           ...(data.videoQuality !== undefined && { videoQuality: data.videoQuality }),
           ...(data.dailyVideoLimit !== undefined && { dailyVideoLimit: data.dailyVideoLimit }),
           ...(data.newsSources !== undefined && { newsSources: data.newsSources }),
@@ -133,6 +140,9 @@ function mongoToConfig(doc: any): AppConfig {
     aiProvider: doc.aiProvider ?? "beeknoee",
     aiApiKey: doc.aiApiKey ?? null,
     aiModel: doc.aiModel ?? null,
+    visionProvider: doc.visionProvider ?? null,
+    visionApiKey: doc.visionApiKey ?? null,
+    visionModel: doc.visionModel ?? null,
     videoQuality: doc.videoQuality ?? "720p",
     dailyVideoLimit: doc.dailyVideoLimit ?? 10,
     newsSources: doc.newsSources ?? "[]",

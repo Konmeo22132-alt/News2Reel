@@ -13,11 +13,15 @@ export type AppConfig = {
   id: number;
   ClaudeApiKey: string | null; // legacy
   aiProvider: string;            // "beeknoee" | "groq"
-  aiApiKey: string | null;       // active API key
-  aiModel: string | null;        // active model name
+  aiApiKey: string | null;       // Script-writing API key
+  aiModel: string | null;        // Script-writing model
+  // Vision Agent (optional)
+  visionProvider: string | null;
+  visionApiKey: string | null;
+  visionModel: string | null;
   videoQuality: string;
   dailyVideoLimit: number;
-  newsSources: string; // JSON array string
+  newsSources: string;
   channelGoal: string;
   tiktokApiKey: string | null;
   tiktokApiSecret: string | null;

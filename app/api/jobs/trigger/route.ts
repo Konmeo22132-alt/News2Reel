@@ -10,7 +10,15 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const sourceUrl = (body?.sourceUrl ?? "").trim();
-    const engine = body?.engine === "remotion" ? "remotion" : "ffmpeg";
+
+    // Support all 4 engines
+    const engineRaw = body?.engine ?? "ffmpeg";
+    const engine = (["ffmpeg", "remotion", "hyperframes", "hybrid"] as const).includes(engineRaw)
+      ? engineRaw as "ffmpeg" | "remotion" | "hyperframes" | "hybrid"
+      : "ffmpeg";
+
+    // Optional per-request Vision API key override (from CreateVideoForm Vision Agent field)
+    const visionApiKeyOverride: string | undefined = body?.visionApiKey || undefined;
 
     if (!sourceUrl || !sourceUrl.startsWith("http")) {
       return NextResponse.json(
@@ -32,11 +40,19 @@ export async function POST(request: NextRequest) {
     const jobId = uuidv4();
     await VideoJobModel.create({ jobId, sourceUrl, status: "pending", engine });
 
+    // Merge per-request vision key override into config
+    const effectiveConfig: AppConfig = visionApiKeyOverride
+      ? { ...config, visionApiKey: visionApiKeyOverride }
+      : config;
+
     Promise.resolve()
-      .then(() => processVideoJob(jobId, sourceUrl, engine, config as AppConfig))
+      .then(() => processVideoJob(jobId, sourceUrl, engine, effectiveConfig))
       .catch((err) => console.error(`[Job ${jobId}] Background task failed:`, err));
 
-    return NextResponse.json({ success: true, jobId, message: "Pipeline đã khởi động" });
+    return NextResponse.json({
+      success: true, jobId,
+      message: `Pipeline đã khởi động (${engine}${visionApiKeyOverride ? " + Vision Agent" : ""})`,
+    });
   } catch (err) {
     console.error("trigger error:", err);
     return NextResponse.json({ success: false, error: "Lỗi server nội bộ" }, { status: 500 });

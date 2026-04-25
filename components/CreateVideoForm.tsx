@@ -30,7 +30,9 @@ interface CreateVideoFormProps {
 export default function CreateVideoForm({ defaultSources = [] }: CreateVideoFormProps) {
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState("");
-  const [engine, setEngine] = useState<"ffmpeg" | "remotion" | "hyperframes">("ffmpeg");
+  const [engine, setEngine] = useState<"ffmpeg" | "remotion" | "hyperframes" | "hybrid">("ffmpeg");
+  const [visionApiKey, setVisionApiKey] = useState("");
+  const [showVisionKey, setShowVisionKey] = useState(false);
   const [state, setState] = useState<JobState>({ phase: "idle" });
   const [statusText, setStatusText] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -114,7 +116,11 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
       const res = await fetch("/api/jobs/trigger", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sourceUrl: url.trim(), engine }),
+        body: JSON.stringify({
+          sourceUrl: url.trim(),
+          engine,
+          ...(visionApiKey.trim() ? { visionApiKey: visionApiKey.trim() } : {}),
+        }),
       });
       const data = await res.json();
 
@@ -397,46 +403,154 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
                 )}
               </div>
 
+              {/* Engine Selector — Premium Card Grid */}
               <div>
-                <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>
+                <label className="block text-xs font-medium mb-2" style={{ color: "var(--text-secondary)" }}>
                   Rendering Engine
                 </label>
-                <div className="flex flex-col gap-1.5">
+                <div className="grid grid-cols-2 gap-2">
                   {([
-                    { value: "ffmpeg",       label: "FFmpeg",       badge: "Nhanh",     desc: "Server-side, không cần Chrome",        badgeColor: "#10b981" },
-                    { value: "remotion",     label: "Remotion",     badge: "HQ Viral",  desc: "React component, Ken Burns + karaoke", badgeColor: "#818cf8" },
-                    { value: "hyperframes",  label: "HyperFrames",  badge: "Cinematic", desc: "HTML/GSAP, animation đẹp nhất",         badgeColor: "#f59e0b" },
-                  ] as const).map(({ value, label, badge, desc, badgeColor }) => (
-                    <label
-                      key={value}
-                      className="flex items-center gap-3 p-2.5 rounded cursor-pointer border transition-colors hover:bg-gray-800/20"
-                      style={{
-                        borderColor: engine === value ? badgeColor + "66" : "var(--border)",
-                        background: engine === value ? badgeColor + "0d" : "transparent",
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name="engine"
-                        value={value}
-                        checked={engine === value}
-                        onChange={() => setEngine(value)}
-                        className="accent-indigo-500 shrink-0"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{label}</span>
-                          <span
-                            className="text-[10px] font-bold px-1.5 py-0.5 rounded"
-                            style={{ background: badgeColor + "22", color: badgeColor }}
-                          >{badge}</span>
+                    {
+                      value: "ffmpeg",
+                      label: "FFmpeg",
+                      badge: "Nhanh",
+                      desc: "Server-side, không cần Chrome",
+                      icon: "⚡",
+                      gradient: "135deg, #10b981, #059669",
+                      badgeColor: "#10b981",
+                    },
+                    {
+                      value: "remotion",
+                      label: "Remotion",
+                      badge: "HQ Viral",
+                      desc: "React zones + karaoke",
+                      icon: "⚛️",
+                      gradient: "135deg, #818cf8, #6366f1",
+                      badgeColor: "#818cf8",
+                    },
+                    {
+                      value: "hyperframes",
+                      label: "HyperFrames",
+                      badge: "Cinematic",
+                      desc: "HTML/GSAP, đẹp nhất",
+                      icon: "🎥",
+                      gradient: "135deg, #f59e0b, #d97706",
+                      badgeColor: "#f59e0b",
+                    },
+                    {
+                      value: "hybrid",
+                      label: "Hybrid ✨",
+                      badge: "Best Quality",
+                      desc: "Remotion + HF color grade",
+                      icon: "🔀",
+                      gradient: "135deg, #ec4899, #8b5cf6",
+                      badgeColor: "#ec4899",
+                    },
+                  ] as const).map(({ value, label, badge, desc, icon, gradient, badgeColor }) => {
+                    const isSelected = engine === value;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setEngine(value)}
+                        className="relative text-left p-3 rounded-xl transition-all duration-200 overflow-hidden group"
+                        style={{
+                          background: isSelected
+                            ? `linear-gradient(${gradient.replace("135deg", "135deg")})22`
+                            : "var(--surface-3)",
+                          border: isSelected
+                            ? `1.5px solid ${badgeColor}88`
+                            : "1.5px solid var(--border)",
+                          boxShadow: isSelected
+                            ? `0 0 16px ${badgeColor}22, inset 0 0 24px ${badgeColor}08`
+                            : "none",
+                          transform: isSelected ? "scale(1.02)" : "scale(1)",
+                        }}
+                      >
+                        {/* Gradient accent bar */}
+                        <div
+                          className="absolute top-0 left-0 right-0 h-0.5 rounded-t-xl transition-opacity duration-200"
+                          style={{
+                            background: `linear-gradient(${gradient})`,
+                            opacity: isSelected ? 1 : 0,
+                          }}
+                        />
+                        <div className="flex items-start gap-2">
+                          <span className="text-lg flex-shrink-0 mt-0.5">{icon}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span
+                                className="text-xs font-bold"
+                                style={{ color: isSelected ? badgeColor : "var(--text-primary)" }}
+                              >
+                                {label}
+                              </span>
+                              <span
+                                className="text-[9px] font-black px-1.5 py-0.5 rounded-full tracking-wide"
+                                style={{
+                                  background: `linear-gradient(${gradient})`,
+                                  color: "white",
+                                  letterSpacing: "0.04em",
+                                }}
+                              >
+                                {badge}
+                              </span>
+                            </div>
+                            <p className="text-[10px] mt-0.5 leading-tight" style={{ color: "var(--text-muted)" }}>
+                              {desc}
+                            </p>
+                          </div>
+                          {isSelected && (
+                            <div
+                              className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0"
+                              style={{ background: badgeColor }}
+                            >
+                              <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                                <path d="M1 4l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </div>
+                          )}
                         </div>
-                        <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{desc}</p>
-                      </div>
-                    </label>
-                  ))}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Vision API Key (optional) */}
+                <div className="mt-3 p-3 rounded-lg" style={{ background: "rgba(139,92,246,0.06)", border: "1px dashed rgba(139,92,246,0.25)" }}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-sm">👁</span>
+                    <p className="text-xs font-medium" style={{ color: "#a78bfa" }}>Vision Agent API Key</p>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded font-bold" style={{ background: "rgba(139,92,246,0.15)", color: "#c4b5fd" }}>Tùy chọn</span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showVisionKey ? "text" : "password"}
+                      value={visionApiKey}
+                      onChange={(e) => setVisionApiKey(e.target.value)}
+                      placeholder="sk-... (model multimodal đọc ảnh riêng)"
+                      className="input font-mono text-xs pr-8"
+                      style={{ fontSize: 11 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowVisionKey(!showVisionKey)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      {showVisionKey
+                        ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                        : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      }
+                    </button>
+                  </div>
+                  <p className="text-[10px] mt-1.5" style={{ color: "var(--text-muted)" }}>
+                    💡 Vision Agent nhìn ảnh trước → brief cho Script Writer → kịch bản sâu hơn, đúng ngữ cảnh hơn.
+                    {visionApiKey && <span className="text-purple-400 ml-1">✔ Sẽ dùng key này</span>}
+                  </p>
                 </div>
               </div>
+
 
               <div className="flex gap-2">
                 <button

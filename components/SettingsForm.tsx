@@ -21,6 +21,9 @@ type AppConfig = {
   aiProvider: string;
   aiApiKey: string | null;
   aiModel: string | null;
+  visionProvider: string | null;
+  visionApiKey: string | null;
+  visionModel: string | null;
   videoQuality: string;
   dailyVideoLimit: number;
   newsSources: string;
@@ -85,11 +88,16 @@ export default function SettingsForm({ config }: { config: AppConfig }) {
   // Show-password toggles
   const [showDk, setShowDk] = useState(false);
   const [showTts, setShowTts] = useState(false);
+  const [showVk, setShowVk] = useState(false);
 
   // Form state
   const [aiProvider, setAiProvider] = useState(config.aiProvider ?? "beeknoee");
   const [aiApiKey, setAiApiKey]     = useState(config.aiApiKey ?? config.ClaudeApiKey ?? "");
   const [aiModel, setAiModel]       = useState(config.aiModel ?? "");
+  // Vision Agent
+  const [visionProvider, setVisionProvider] = useState(config.visionProvider ?? "beeknoee");
+  const [visionApiKey, setVisionApiKey]     = useState(config.visionApiKey ?? "");
+  const [visionModel, setVisionModel]       = useState(config.visionModel ?? "");
   const [ClaudeApiKey, setClaudeApiKey] = useState(config.ClaudeApiKey ?? "");
   const [videoQuality, setVideoQuality] = useState(config.videoQuality);
   const [dailyVideoLimit, setDailyVideoLimit] = useState(String(config.dailyVideoLimit));
@@ -130,7 +138,10 @@ export default function SettingsForm({ config }: { config: AppConfig }) {
         aiProvider,
         aiApiKey: aiApiKey || undefined,
         aiModel: aiModel || undefined,
-        ClaudeApiKey: aiApiKey || undefined, // keep legacy in sync
+        ClaudeApiKey: aiApiKey || undefined,
+        visionProvider: visionProvider || undefined,
+        visionApiKey: visionApiKey || undefined,
+        visionModel: visionModel || undefined,
         videoQuality,
         dailyVideoLimit: parseInt(dailyVideoLimit, 10) || 10,
         newsSources: JSON.stringify(sources),
@@ -315,6 +326,95 @@ export default function SettingsForm({ config }: { config: AppConfig }) {
                 ? "Groq models: llama-3.3-70b-versatile, llama-3.1-8b-instant, mixtral-8x7b-32768"
                 : "Beeknoee models: openai/gpt-oss-120b, anthropic/claude-3-haiku"}
             </p>
+          </div>
+
+          {/* ─── Vision Agent Section ─── */}
+          <div
+            className="rounded-xl p-4 space-y-3"
+            style={{
+              background: "rgba(139,92,246,0.05)",
+              border: "1px dashed rgba(139,92,246,0.3)",
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-base">👁️</span>
+              <div>
+                <p className="text-sm font-semibold" style={{ color: "#a78bfa" }}>Vision Agent</p>
+                <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                  Agent đọc ảnh riêng → brief cho Script Writer → kịch bản sâu hơn
+                </p>
+              </div>
+              <span
+                className="ml-auto text-[10px] px-2 py-0.5 rounded-full font-bold"
+                style={{ background: "rgba(139,92,246,0.15)", color: "#c4b5fd" }}
+              >
+                Tùy chọn
+              </span>
+            </div>
+
+            {/* Vision Provider */}
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { v: "beeknoee", name: "Beeknoee", badge: "GPT-4o",  color: "#818cf8" },
+                { v: "groq",     name: "Groq",      badge: "LLaVA",   color: "#f59e0b" },
+              ] as const).map(({ v, name, badge, color }) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setVisionProvider(v)}
+                  className="p-2.5 rounded-lg text-left transition-all"
+                  style={{
+                    background: visionProvider === v ? "rgba(139,92,246,0.12)" : "var(--surface-3)",
+                    border: visionProvider === v ? "1px solid rgba(139,92,246,0.35)" : "1px solid var(--border)",
+                  }}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-semibold" style={{ color: visionProvider === v ? "#c4b5fd" : "var(--text-secondary)" }}>{name}</p>
+                    <span className="text-[10px] px-1 py-0.5 rounded font-bold" style={{ background: `${color}22`, color }}>{badge}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {/* Vision API Key */}
+            <div>
+              <label style={{ ...labelStyle, color: "#a78bfa" }}>Vision API Key</label>
+              <div className="relative">
+                <input
+                  type={showVk ? "text" : "password"}
+                  value={visionApiKey}
+                  onChange={(e) => setVisionApiKey(e.target.value)}
+                  placeholder={visionProvider === "groq" ? "gsk_..." : "sk-bee-... (dùng model có vision)"}
+                  className="input pr-10 font-mono text-sm"
+                  style={{ borderColor: visionApiKey ? "rgba(139,92,246,0.4)" : undefined }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowVk(!showVk)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  {showVk ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Vision Model */}
+            <div>
+              <label style={{ ...labelStyle, color: "#a78bfa" }}>Vision Model</label>
+              <input
+                type="text"
+                value={visionModel}
+                onChange={(e) => setVisionModel(e.target.value)}
+                placeholder={visionProvider === "groq" ? "llava-v1.5-7b-4096-preview" : "openai/gpt-4o"}
+                className="input font-mono text-sm"
+              />
+              <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>
+                {visionApiKey
+                  ? <span style={{ color: "#a78bfa" }}>✔ Vision Agent sẽ chạy trước Script Writer</span>
+                  : "Bỏ trống nếu muốn dùng cùng 1 key với Script Writer (set key ở ô Vision Agent trong form tạo video)"}
+              </p>
+            </div>
           </div>
 
           <div>

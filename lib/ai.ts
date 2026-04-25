@@ -140,6 +140,78 @@ function buildUserMessage(
   return [textPart, ...imageParts];
 }
 
+// ─── Vision Agent ─────────────────────────────────────────────────────────────
+/**
+ * Dual-agent meeting:
+ * 1. Vision Agent: nhìn ảnh, mô tả chi tiết ngữ cảnh, người, tình huống
+ * 2. Script Writer: nhận brief từ Vision Agent, viết kịch bản sâu hơn, đúng hơn
+ *
+ * Returns a text brief string (đưa vào system prompt của Script Writer).
+ */
+async function analyzeImagesWithVisionAgent(opts: {
+  imageUrls: string[];
+  articleTitle: string;
+  visionApiKey: string;
+  visionProvider: string;
+  visionModel: string;
+}): Promise<string> {
+  const { imageUrls, articleTitle, visionApiKey, visionProvider, visionModel } = opts;
+  const apiUrl = PROVIDER_URLS[visionProvider] ?? PROVIDER_URLS.beeknoee;
+  const imgs = imageUrls.slice(0, MAX_VISION_IMAGES);
+
+  const content: Array<Record<string, unknown>> = [
+    {
+      type: "text",
+      text: [
+        `Bạn là Vision Agent. Nhiệm vụ: nhìn vào các ảnh sau và mô tả chi tiết nhất có thể.`,
+        `Tiêu đề bài viết: "${articleTitle}"`,
+        ``,
+        `Với mỗi ảnh, hãy cung cấp:`,
+        `1. Mô tả nội dung chính (người/sự kiện/cảnh vật)`,
+        `2. Không khí/cảm xúc (kịch tính/tăng trưởng/đáng ngại/lạc quan...)`,
+        `3. URL ảnh nào phù hợp nhất cho scene nào (hook/nội dung chính/CTA)`,
+        `4. Nhiều chi tiết đặc biệt nào trong ảnh có thể tạo hóok tốt cho video ngắn?`,
+        ``,
+        `Trả về bảng tóm tắt dạng markdown ngắn gọn (được dùng để brief cho script writer).`,
+      ].join("\n"),
+    },
+    ...imgs.map((url) => ({
+      type: "image_url",
+      image_url: { url, detail: "low" },
+    })),
+  ];
+
+  try {
+    const res = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${visionApiKey}`,
+      },
+      body: JSON.stringify({
+        model: visionModel,
+        messages: [{ role: "user", content }],
+        max_tokens: 1200,
+        temperature: 0.4,
+      }),
+      signal: AbortSignal.timeout(60_000),
+    });
+
+    if (!res.ok) {
+      const err = await res.text().catch(() => "");
+      console.warn(`[VisionAgent] Failed (${res.status}): ${err.slice(0, 200)}`);
+      return "";
+    }
+    const json = await res.json();
+    const brief = json?.choices?.[0]?.message?.content ?? "";
+    console.log(`[VisionAgent] Brief (${brief.length} chars): ${brief.slice(0, 150)}...`);
+    return brief;
+  } catch (e) {
+    console.warn(`[VisionAgent] Error:`, e);
+    return "";
+  }
+}
+
 export async function generateScript(
   article: ScrapedArticle,
   config: {
@@ -149,7 +221,11 @@ export async function generateScript(
     aiProvider?: string;
     aiModel?: string | null;
     engine: "ffmpeg" | "remotion";
-    useVision?: boolean; // Bật vision nếu model hỗ trợ (default: true khi có ảnh)
+    useVision?: boolean;
+    // Vision Agent (optional) — reads images, briefs script writer
+    visionApiKey?: string | null;
+    visionModel?: string | null;
+    visionProvider?: string | null;
   }
 ): Promise<VideoScript> {
   const { apiKey, channelGoal, customPrompt } = config;
@@ -158,11 +234,30 @@ export async function generateScript(
     : (PROVIDER_URLS[provider] ?? PROVIDER_URLS.beeknoee);
   const model = ENV_MODEL ?? config.aiModel ?? DEFAULT_MODELS[provider] ?? DEFAULT_MODELS.beeknoee;
 
-  console.log(`[AI] Provider: ${provider} | Model: ${model} | URL: ${apiUrl}`);
+  console.log(`[ScriptAgent] Provider: ${provider} | Model: ${model}`);
 
   const hasImages = (article.imageUrls?.length ?? 0) > 0;
-  // visionEnabled: mutable — auto-disables if model returns 400 (unsupported vision)
   let visionEnabled = config.useVision !== false && hasImages;
+
+  // ── Vision Agent: read images and brief script writer ──
+  let visionBrief = "";
+  const hasVisionAgent = !!(config.visionApiKey && config.visionModel);
+  if (hasVisionAgent && hasImages) {
+    console.log(`[VisionAgent] Running separate vision analysis (${config.visionModel})...`);
+    visionBrief = await analyzeImagesWithVisionAgent({
+      imageUrls: article.imageUrls ?? [],
+      articleTitle: article.title,
+      visionApiKey: config.visionApiKey!,
+      visionProvider: config.visionProvider ?? config.aiProvider ?? "beeknoee",
+      visionModel: config.visionModel!,
+    });
+    // When vision agent is running, script writer doesn't need to process images directly
+    if (visionBrief) visionEnabled = false;
+  }
+
+  // Inject vision brief into system prompt when available
+  const systemPrompt = SYSTEM_PROMPT(channelGoal, customPrompt ?? "", config.engine)
+    + (visionBrief ? `\n\n═══ BÁO CÁO TỪ VISION AGENT ═══\n${visionBrief}\n═══════════════════════════` : "");
 
   const buildBody = (withVision: boolean) => {
     const userContent = withVision
@@ -171,7 +266,7 @@ export async function generateScript(
     return JSON.stringify({
       model,
       messages: [
-        { role: "system", content: SYSTEM_PROMPT(channelGoal, customPrompt ?? "", config.engine) },
+        { role: "system", content: systemPrompt },
         { role: "user",   content: userContent },
       ],
       temperature: 0.8,
@@ -180,7 +275,9 @@ export async function generateScript(
   };
 
   if (visionEnabled) {
-    console.log(`[AI] Vision mode ON — gửi ${Math.min((article.imageUrls?.length ?? 0), MAX_VISION_IMAGES)} ảnh cùng bài viết`);
+    console.log(`[ScriptAgent] Vision mode ON — gửi ${Math.min((article.imageUrls?.length ?? 0), MAX_VISION_IMAGES)} ảnh`);
+  } else if (visionBrief) {
+    console.log(`[ScriptAgent] Using Vision Agent brief (${visionBrief.length} chars)`);
   }
 
   // Retry up to 3 times on 429 (rate limit)
