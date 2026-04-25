@@ -40,6 +40,9 @@ const VOICE_FALLBACK_ORDER = [
   "vi-VN-AnNeural",
 ];
 
+// Track last successful voice to prioritize it on next call (session cache)
+let lastSuccessfulVoice: string | null = null;
+
 export async function textToSpeech(
   text: string,
   outputPath: string,
@@ -49,10 +52,11 @@ export async function textToSpeech(
   const rate  = options.rate  || DEFAULT_RATE;
   const pitch = options.pitch || DEFAULT_PITCH;
 
-  // Build retry list: requested voice first, then the others
+  // Prioritize last successful voice to avoid redundant retries across scenes
+  const priorityVoice = lastSuccessfulVoice ?? requestedVoice;
   const voiceOrder = [
-    requestedVoice,
-    ...VOICE_FALLBACK_ORDER.filter((v) => v !== requestedVoice),
+    priorityVoice,
+    ...VOICE_FALLBACK_ORDER.filter((v) => v !== priorityVoice),
   ];
 
   let lastEdgeError: unknown;
@@ -65,21 +69,27 @@ export async function textToSpeech(
       } else {
         console.log(`[TTS] Generated with Edge TTS: ${voice} @ ${rate}`);
       }
+      lastSuccessfulVoice = voice; // Cache for next call
       return;
     } catch (edgeError) {
       lastEdgeError = edgeError;
       console.warn(`[TTS] Voice ${voice} failed (attempt ${attempt + 1}/${voiceOrder.length}): ${edgeError}`);
-      // Short back-off before retry
       if (attempt < voiceOrder.length - 1) {
-        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+        // Longer back-off to avoid Microsoft rate-limit from VPS IP: 5s, 15s
+        const delay = attempt === 0 ? 5000 : 15000;
+        const jitter = Math.floor(Math.random() * 3000); // 0–3s random jitter
+        console.log(`[TTS] Waiting ${((delay + jitter) / 1000).toFixed(1)}s before next voice...`);
+        await new Promise((r) => setTimeout(r, delay + jitter));
       }
     }
   }
 
-  // All edge-tts voices failed — fall back to Google TTS
+  // All voices failed — reset cache so next call starts fresh
+  lastSuccessfulVoice = null;
   console.warn(`[TTS] All Edge TTS voices failed, using Google TTS fallback. Last error: ${lastEdgeError}`);
   await synthesizeWithGoogleTTS(text, outputPath);
 }
+
 
 /**
  * Synthesize using edge-tts CLI (requires Python + edge-tts package)

@@ -82,6 +82,10 @@ export async function renderRemotionVideo(
         const mp3Path = path.join(remotionAssetsDir, mp3FileName);
         const ttsNarration = scene.narration.replace(/<\/?keyword>/gi, "");
         await textToSpeech(ttsNarration, mp3Path, { voice: "vi-VN-NamMinhNeural", rate: "+20%" });
+
+        // Small cooldown between TTS calls to avoid Microsoft edge-tts rate-limiting
+        if (i < totalSteps - 1) await new Promise((r) => setTimeout(r, 1200));
+
         
         const durationSec = await getAudioDuration(mp3Path);
         const durationFrames = Math.ceil(durationSec * 30) + 15;
