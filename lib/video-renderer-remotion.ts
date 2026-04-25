@@ -122,9 +122,33 @@ export async function renderRemotionVideo(
     // 4. Execute Remotion
     onProgress(35, `Đang khởi động Remotion Engine (${absoluteTotalFrames} frames)...`);
 
-    const remotionCmd = `npx remotion render remotion/index.ts AutoVideoComposition "${outFile}" --props="${propsFile}" --frames=0-${absoluteTotalFrames - 1} --log=info --timeout=120000 --concurrency=1`;
+    const MAX_RENDER_MS = 45 * 60 * 1000; // 45 minute hard cap
 
-    const child = exec(remotionCmd);
+    const remotionCmd = [
+      `NODE_OPTIONS="--max-old-space-size=2048"`,
+      `npx remotion render remotion/index.ts AutoVideoComposition`,
+      `"${outFile}"`,
+      `--props="${propsFile}"`,
+      `--frames=0-${absoluteTotalFrames - 1}`,
+      `--log=info`,
+      `--timeout=120000`,
+      `--concurrency=1`,
+    ].join(" ");
+
+    const child = exec(remotionCmd, {
+      env: {
+        ...process.env,
+        NODE_OPTIONS: "--max-old-space-size=2048",
+        // Chromium stability flags for headless render on VPS
+        CHROMIUM_FLAGS: "--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage",
+      },
+    });
+
+    // Hard timeout — kill Remotion if it hangs beyond 45 minutes
+    const killTimer = setTimeout(() => {
+      console.error(`[Remotion ${jobId}] ⏰ Hard timeout (45min) reached — killing render process`);
+      child.kill("SIGKILL");
+    }, MAX_RENDER_MS);
 
     child.stdout?.on("data", (data: string) => {
       const match = data.toString().match(/\[(\d+)\/(\d+)\]/);
@@ -147,11 +171,18 @@ export async function renderRemotionVideo(
     });
 
     await new Promise((resolve, reject) => {
-      child.on("close", (code) => {
-        if (code === 0) resolve(true);
-        else reject(new Error(`Remotion exited with code ${code}`));
+      child.on("close", (code, signal) => {
+        clearTimeout(killTimer);
+        if (signal === "SIGKILL") {
+          reject(new Error(`Remotion bị kill sau 45 phút (quá lâu). Thử dùng engine FFmpeg.`));
+        } else if (code === 0) {
+          resolve(true);
+        } else {
+          reject(new Error(`Remotion exited with code ${code}`));
+        }
       });
     });
+
 
     onProgress(100, "Hoàn tất Remotion");
     return `/api/stream/videos/video_${jobId}_remotion.mp4`;
