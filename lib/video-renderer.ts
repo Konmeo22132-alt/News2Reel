@@ -134,11 +134,12 @@ async function renderScene(opts: {
   const crf = quality === "1080p" ? "17" : "20";
 
   // ── Style: hook=yellow+large, cta=green, normal=white ──
+  // FontSize giảm từ 110 xuống 88 — subtitle 4 chữ ờt chỗ hơn
   const assStyle = isHook
-    ? { ...DEFAULT_ASS_STYLE, fontSize: 120, primaryColor: ASS_COLORS.yellow }
+    ? { ...DEFAULT_ASS_STYLE, fontSize: 88, primaryColor: ASS_COLORS.yellow }
     : isCTA
-    ? { ...DEFAULT_ASS_STYLE, fontSize: 90, primaryColor: ASS_COLORS.green }
-    : DEFAULT_ASS_STYLE;
+      ? { ...DEFAULT_ASS_STYLE, fontSize: 72, primaryColor: ASS_COLORS.green }
+      : { ...DEFAULT_ASS_STYLE, fontSize: 82 };
 
   const assContent = generateWordByWordASS(narration, audioDuration, assStyle);
   await saveASSFile(assContent, assPath);
@@ -148,20 +149,38 @@ async function renderScene(opts: {
 
   const brollPath = path.join(BROLL_DIR, "serious_loop.mp4");
   const hasBroll = fs.existsSync(brollPath);
+  const hasArticleImage = !!(opts.articleImagePath && fs.existsSync(opts.articleImagePath));
 
   // ── Layer 1: Background Loop or Gradient ──
   let afterBgLabel = "bg";
   if (hasBroll) {
-    // We expect the broll to be mapped dynamically below as [BROLL_INPUT_MARKER]
-    // Crop it to 1080x1920 center and apply a heavy boxblur
-    filterComplex += `[BROLL_INPUT_MARKER]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},boxblur=20[bg_raw]; `;
-    // Overlay a dark overlay to make it moody and professional
+    // setpts=PTS-STARTPTS: reset timestamps after -stream_loop để tránh giật khi loop
+    filterComplex += `[BROLL_INPUT_MARKER]setpts=PTS-STARTPTS,scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},boxblur=20,fps=30[bg_raw]; `;
     filterComplex += `color=c=black@0.65:s=${width}x${height}:r=30:d=${videoDuration}[dark_dim]; `;
-    filterComplex += `[bg_raw][dark_dim]overlay=format=auto[bg]; `;
+    filterComplex += `[bg_raw][dark_dim]overlay=format=auto:shortest=1[bg]; `;
   } else {
     const gradFilter = generateAnimatedGradientFilter(width, height, theme.from, theme.to, videoDuration);
     filterComplex += `[0:v]${gradFilter}[bg]; `;
   }
+
+  // ── Layer 1.5: Article Image with Ken Burns (crop to 9:16) ──
+  // Scale image to fill 1080x1920, then apply slow zoompan for Ken Burns effect
+  let afterImgLabel = afterBgLabel;
+  if (hasArticleImage) {
+    // Step 1: Scale to fill 1080 wide, crop to 1920 tall (9:16 fill)
+    filterComplex += `[IMG_INPUT_MARKER]scale=${width}:-1,crop=${width}:${height}:(iw-${width})/2:(ih-${height})/2[img_crop]; `;
+    // Step 2: Ken Burns — slow zoom from 1.0 to 1.08 over duration
+    const zoomRate = (0.08 / (videoDuration * 30)).toFixed(6); // zoom step per frame
+    filterComplex += `[img_crop]zoompan=z='min(zoom+${zoomRate},1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${Math.round(videoDuration * 30)}:s=${width}x${height}:fps=30[img_kb]; `;
+    // Step 3: Dark overlay for readability
+    filterComplex += `color=c=black@0.45:s=${width}x${height}:r=30:d=${videoDuration}[img_dark]; `;
+    filterComplex += `[img_kb][img_dark]overlay=format=auto[img_ov]; `;
+    // Step 4: Overlay on background
+    filterComplex += `[${afterBgLabel}][img_ov]overlay=0:0[bg_with_img]; `;
+    afterImgLabel = "bg_with_img";
+  }
+
+  afterBgLabel = afterImgLabel;
 
   // ── Layer 2: Social UI Overlay ──
   const hasSocialImage = !!(socialImagePath && fs.existsSync(socialImagePath));
@@ -179,11 +198,33 @@ async function renderScene(opts: {
     beforeAssLabel = "with_social";
   }
 
-  // ── Layer 4: ASS subtitle karaoke ──
-  const baseLabel = beforeAssLabel;
+  // ── Layer 3: ASS subtitle karaoke ──
   const assEscaped = assPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\''");
+  filterComplex += `[${beforeAssLabel}]ass='${assEscaped}'[with_sub]; `;
 
-  filterComplex += `[${baseLabel}]ass='${assEscaped}'[out]`;
+  // ── Layer 4: Watermark (channel name top-left) ──
+  const fontFile = fs.existsSync("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
+    ? "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+    : (fs.existsSync("C:/Windows/Fonts/arialbd.ttf") ? "C\\:/Windows/Fonts/arialbd.ttf" : "");
+  const fontFileOpt = fontFile ? `:fontfile='${fontFile}'` : "";
+  filterComplex += `[with_sub]drawtext=text='\u0040News2Reel':x=28:y=28:fontsize=32:fontcolor=0xFFFFFF@0.55:shadowcolor=0x000000@0.8:shadowx=2:shadowy=2${fontFileOpt}[watermarked]; `;
+
+  // ── Layer 5: Breaking News lower-third (Hook scenes only) ──
+  // Hiển thị "BREAKING" tag + title dưới cùng TopZone trong 1.8 giây đầu
+  if (isHook && title) {
+    const safeTitle = title
+      .replace(/'/g, "\u2019")  // smart quote
+      .replace(/:/g, "\\:")     // escape colon for drawtext
+      .replace(/\\\\/g, "\\\\\\\\") // double-escape backslash
+      .slice(0, 55);             // cap length
+    // Red box ("BREAKING" tag)
+    filterComplex += `[watermarked]drawbox=x=24:y=30:w=220:h=56:color=0xE53935@0.95:t=fill[wm_box]; `;
+    filterComplex += `[wm_box]drawtext=text='BREAKING':x=34:y=46:fontsize=28:fontcolor=white:fontweight=bold${fontFileOpt}[wm_brk]; `;
+    // Title text below the box — fade out after 2.5s
+    filterComplex += `[wm_brk]drawtext=text='${safeTitle}':x=24:y=104:fontsize=38:fontcolor=white:shadowcolor=black@0.9:shadowx=2:shadowy=2:alpha='if(lt(t,2.5),1,max(0,1-(t-2.5)/0.5))'${fontFileOpt}[out]`;
+  } else {
+    filterComplex += `[watermarked]copy[out]`;
+  }
 
   return new Promise<void>((resolve, reject) => {
     const cmd = ffmpeg();
@@ -202,6 +243,12 @@ async function renderScene(opts: {
       currentInputIdx++;
     }
 
+    if (hasArticleImage) {
+      cmd.input(opts.articleImagePath!);
+      filterComplex = filterComplex.replace(/\[IMG_INPUT_MARKER\]/g, `[${currentInputIdx}:v]`);
+      currentInputIdx++;
+    }
+
     if (hasSocialImage) {
       cmd.input(socialImagePath!);
       filterComplex = filterComplex.replace(/\[SOCIAL_INPUT_MARKER\]/g, `[${currentInputIdx}:v]`);
@@ -215,10 +262,18 @@ async function renderScene(opts: {
 
     cmd.complexFilter(filterComplex);
 
-    cmd.outputOptions([
+    // BGM volume: -18dB relative to TTS voice (approx weight 0.12)
+    // amix with voice at full volume, BGM at 0.12 weight
+    const audioMixMap = bgmPath
+      ? ["-filter_complex", `[${audioInputIdx}:a]volume=1.0[voice];[${currentInputIdx - 1}:a]volume=0.12[bgm];[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]`,
+         "-map", "[out]", "-map", "[aout]"]
+      : ["-map", "[out]", "-map", `${audioInputIdx}:a`];
+
+    // Note: if bgmPath present, audio is handled by filter_complex above,
+    // so we do NOT use separate -map for individual audio streams.
+    const finalOutputOpts = bgmPath ? [
       "-map", "[out]",
-      "-map", `${audioInputIdx}:a`,
-      ...(bgmPath ? ["-map", `${currentInputIdx - 1}:a`] : []),
+      "-map", "[aout]",
       "-c:v", "libx264",
       "-preset", "fast",
       "-crf", crf,
@@ -228,8 +283,21 @@ async function renderScene(opts: {
       "-shortest",
       "-avoid_negative_ts", "make_zero",
       `-metadata`, `title=${title}`,
-      `-metadata`, `comment=Generated by AutoVideo TikTok Engine v2.0`,
-    ]);
+    ] : [
+      "-map", "[out]",
+      "-map", `${audioInputIdx}:a`,
+      "-c:v", "libx264",
+      "-preset", "fast",
+      "-crf", crf,
+      "-pix_fmt", "yuv420p",
+      "-c:a", "aac",
+      "-b:a", "128k",
+      "-shortest",
+      "-avoid_negative_ts", "make_zero",
+      `-metadata`, `title=${title}`,
+    ];
+
+    cmd.outputOptions(finalOutputOpts);
 
     cmd.output(outputPath);
     cmd.on("end", () => resolve());
@@ -238,37 +306,113 @@ async function renderScene(opts: {
   });
 }
 
-// ─── Concatenation ────────────────────────────────────────────────────────────
+// ─── Concatenation with Cross-Dissolve Transitions ───────────────────────────
+
+/**
+ * Concat scenes with a 0.3s cross-dissolve transition between each pair.
+ *
+ * Strategy (FFmpeg xfade):
+ *   - Simple copy concat for 1 scene (no transition needed)
+ *   - For N scenes: chain xfade filters: [0][1]xfade → [t01], [t01][2]xfade → [t012], ...
+ *   - Transition duration: XFADE_DURATION seconds (short = less jarring, avoids resampling issues)
+ *   - Audio: amix at transition points (crude but works without re-encode)
+ *
+ * Note: xfade requires re-encode (cannot use -c copy), but produces smooth transitions.
+ */
+const XFADE_DURATION = 0.25; // seconds of dissolve overlap
 
 async function concatSegments(
   ffmpeg: FfmpegStatic,
   segmentPaths: string[],
-  outputPath: string
+  outputPath: string,
+  segmentDurations: number[] = []
 ): Promise<void> {
-  const listPath = outputPath + ".concat.txt";
-  const listContent = segmentPaths.map((p) => `file '${p.replace(/\\/g, "/")}'`).join("\n");
-  fs.writeFileSync(listPath, listContent, "utf-8");
+  // Single scene: just copy
+  if (segmentPaths.length === 1) {
+    const listPath = outputPath + ".concat.txt";
+    fs.writeFileSync(listPath, `file '${segmentPaths[0].replace(/\\/g, "/")}'`, "utf-8");
+    return new Promise<void>((resolve, reject) => {
+      ffmpeg()
+        .input(listPath)
+        .inputOptions(["-f", "concat", "-safe", "0"])
+        .outputOptions(["-c", "copy", "-movflags", "+faststart"])
+        .output(outputPath)
+        .on("end", () => { try { fs.unlinkSync(listPath); } catch {} resolve(); })
+        .on("error", (err: Error) => { try { fs.unlinkSync(listPath); } catch {} reject(new Error(`FFmpeg concat: ${err.message}`)); })
+        .run();
+    });
+  }
+
+  // Multi-scene: xfade transition chain
+  // Build filter_complex:
+  //   Each scene is input [0:v], [1:v], [2:v], ...
+  //   [0:v][1:v]xfade=transition=fade:duration=0.25:offset=<d0-0.25>[t01]
+  //   [t01][2:v]xfade=transition=fade:duration=0.25:offset=<cumulative>[t012]
+  //   ...
+  // Audio: amix all audio streams together (simple approach)
+
+  const cmd = ffmpeg();
+  for (const p of segmentPaths) {
+    cmd.input(p);
+  }
+
+  let filterParts: string[] = [];
+  let prevLabel = "0:v";
+  let timeOffset = 0;
+
+  for (let i = 1; i < segmentPaths.length; i++) {
+    const dur = segmentDurations[i - 1] ?? 8;
+    timeOffset += dur - XFADE_DURATION;
+    const outLabel = i === segmentPaths.length - 1 ? "vout" : `t${i}`;
+    const inLabel = i === 1 ? "0:v" : `t${i - 1}`;
+    filterParts.push(
+      `[${inLabel}][${i}:v]xfade=transition=fade:duration=${XFADE_DURATION}:offset=${timeOffset.toFixed(3)}[${outLabel}]`
+    );
+    prevLabel = outLabel;
+  }
+
+  // Audio: amix all inputs
+  const audioInputs = segmentPaths.map((_, i) => `[${i}:a]`).join("");
+  filterParts.push(`${audioInputs}amix=inputs=${segmentPaths.length}:duration=first:dropout_transition=1[aout]`);
+
+  const filterStr = filterParts.join("; ");
 
   return new Promise<void>((resolve, reject) => {
-    ffmpeg()
-      .input(listPath)
-      .inputOptions(["-f", "concat", "-safe", "0"])
+    cmd
+      .complexFilter(filterStr)
       .outputOptions([
-        "-c", "copy",
+        "-map", `[${prevLabel}]`,
+        "-map", "[aout]",
+        "-c:v", "libx264",
+        "-preset", "fast",
+        "-crf", "20",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "aac",
+        "-b:a", "128k",
         "-movflags", "+faststart",
       ])
       .output(outputPath)
-      .on("end", () => {
-        try { fs.unlinkSync(listPath); } catch { /* ignore */ }
-        resolve();
-      })
+      .on("end", () => resolve())
       .on("error", (err: Error) => {
-        try { fs.unlinkSync(listPath); } catch { /* ignore */ }
-        reject(new Error(`FFmpeg concat: ${err.message}`));
+        // Fallback: plain concat without transitions if xfade fails
+        console.warn(`[FFmpeg] xfade failed (${err.message}), falling back to plain concat`);
+        const listPath = outputPath + ".concat.txt";
+        const content = segmentPaths.map((p) => `file '${p.replace(/\\/g, "/")}'`).join("\n");
+        fs.writeFileSync(listPath, content, "utf-8");
+        ffmpeg()
+          .input(listPath)
+          .inputOptions(["-f", "concat", "-safe", "0"])
+          .outputOptions(["-c", "copy"])
+          .output(outputPath)
+          .on("end", () => { try { fs.unlinkSync(listPath); } catch {} resolve(); })
+          .on("error", (e2: Error) => reject(new Error(`FFmpeg concat: ${e2.message}`)))
+          .run();
       })
       .run();
   });
 }
+
+
 
 // ─── Main render function ─────────────────────────────────────────────────────
 
@@ -328,15 +472,18 @@ export async function renderVideo(
   const segmentPaths: string[] = [];
   const mp3Paths: string[] = [];
   const assPaths: string[] = [];
+  const segmentDurations: number[] = []; // Track per-scene duration for xfade offset calc
+
 
   const allScenes = [
-    { narration: script.hook, isHook: true, isCTA: false },
+    { narration: script.hook, isHook: true, isCTA: false, context_image_url: undefined as string | undefined },
     ...script.scenes.map((s) => ({
       narration: s.narration,
       isHook: false,
       isCTA: false,
+      context_image_url: s.context_image_url,
     })),
-    { narration: script.callToAction, isHook: false, isCTA: true },
+    { narration: script.callToAction, isHook: false, isCTA: true, context_image_url: undefined as string | undefined },
   ];
 
   const totalSteps = allScenes.length + 1;
@@ -366,14 +513,26 @@ export async function renderVideo(
       const ttsNarration = scene.narration.replace(/<\/?keyword>/gi, "");
       await textToSpeech(ttsNarration, mp3Path, { voice: "vi-VN-NamMinhNeural", rate: "+20%" });
       const duration = await getAudioDuration(mp3Path);
+      segmentDurations.push(duration + 0.5); // match videoDuration in renderScene
 
       const renderPercent = Math.round(((i * 2 + 1) / (totalSteps * 2)) * 100);
       onProgress?.(renderPercent, `Render cảnh ${i + 1}/${allScenes.length}`);
 
       let articleImagePath: string | null = null;
       if (downloadedImages.length > 0) {
-        const imgIdx = scene.isHook || (scene as any).isCTA ? 0 : i % downloadedImages.length;
-        articleImagePath = downloadedImages[imgIdx] ?? null;
+        // Ưu tiên URL ảnh do AI chọn cho scene này (nếu có trong downloadedImages)
+        const aiUrl = scene.context_image_url;
+        if (aiUrl && articleImageUrls) {
+          const urlIdx = articleImageUrls.indexOf(aiUrl);
+          if (urlIdx >= 0 && urlIdx < downloadedImages.length) {
+            articleImagePath = downloadedImages[urlIdx] ?? null;
+          }
+        }
+        // Fallback: round-robin
+        if (!articleImagePath) {
+          const imgIdx = (scene.isHook || scene.isCTA) ? 0 : i % downloadedImages.length;
+          articleImagePath = downloadedImages[imgIdx] ?? null;
+        }
       }
 
       await renderScene({
@@ -401,7 +560,8 @@ export async function renderVideo(
     onProgress?.(95, "Ghép cảnh thành video");
     const outputFileName = `video_${jobId}.mp4`;
     const outputPath = path.join(OUTPUT_DIR, outputFileName);
-    await concatSegments(ffmpeg, segmentPaths, outputPath);
+    await concatSegments(ffmpeg, segmentPaths, outputPath, segmentDurations);
+
 
     onProgress?.(100, "Hoàn thành render");
     return `/api/stream/videos/${outputFileName}`;

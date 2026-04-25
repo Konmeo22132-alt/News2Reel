@@ -1,56 +1,125 @@
 import React from "react";
-import { AbsoluteFill, Img, interpolate, spring, useCurrentFrame, useVideoConfig, staticFile } from "remotion";
+import { AbsoluteFill, Img, interpolate, useCurrentFrame, useVideoConfig, staticFile } from "remotion";
+import { CONTENT_MAX_BOTTOM, FRAME_WIDTH } from "../constants/layout";
 
-export const NewsPhoto: React.FC<{ imageUrl?: string }> = ({ imageUrl }) => {
+interface Props {
+  imageUrl?: string;
+}
+
+/**
+ * NewsPhoto — Article image with Ken Burns effect.
+ *
+ * Layout rules:
+ *   - Image is CLIPPED at CONTENT_MAX_BOTTOM (1440px) — never enters SubtitleZone
+ *   - Ken Burns: slow zoom 1.0→1.08 + horizontal pan -15px→+15px
+ *   - Blurred background fill to eliminate black bars for non-9:16 images
+ *   - Strong bottom gradient mask so subtitle text is always readable
+ */
+export const NewsPhoto: React.FC<Props> = ({ imageUrl }) => {
   const frame = useCurrentFrame();
-  const { fps, durationInFrames } = useVideoConfig();
+  const { durationInFrames } = useVideoConfig();
 
-  // Smooth, precise Ken Burns zoom effect (1.0 to 1.1 scale)
-  const scale = interpolate(frame, [0, durationInFrames], [1, 1.1], {
+  // Ken Burns zoom
+  const scale = interpolate(frame, [0, durationInFrames], [1.0, 1.08], {
     extrapolateRight: "clamp",
   });
 
-  // Slow horizontal pan from -20px to +20px
-  const translateX = interpolate(frame, [0, durationInFrames], [-20, 20]);
+  // Horizontal drift
+  const translateX = interpolate(frame, [0, durationInFrames], [-15, 15], {
+    extrapolateRight: "clamp",
+  });
+
+  // Content zone height in px
+  const contentHeight = CONTENT_MAX_BOTTOM; // 1440
 
   if (!imageUrl) {
     return (
-      <AbsoluteFill className="bg-gradient-to-b from-[#0a0f18] to-[#020408] flex items-center justify-center">
-        <div className="w-full h-full opacity-10" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)", backgroundSize: '40px 40px' }} />
-      </AbsoluteFill>
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: FRAME_WIDTH,
+          height: contentHeight,
+          background: "linear-gradient(160deg, #0a0f18 0%, #020408 100%)",
+          overflow: "hidden",
+        }}
+      >
+        {/* Subtle grid pattern */}
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            opacity: 0.08,
+            backgroundImage:
+              "linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)",
+            backgroundSize: "40px 40px",
+          }}
+        />
+      </div>
     );
   }
 
-  return (
-    <AbsoluteFill className="bg-black flex items-center justify-center overflow-hidden">
-        {/* Background Blur Layer to eliminate black bars for non-16:9 images */}
-        <AbsoluteFill>
-            <Img 
-                src={imageUrl.startsWith("http") ? imageUrl : staticFile(imageUrl)} 
-                style={{ 
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    filter: "blur(40px) brightness(40%)",
-                    transform: `scale(1.2)`
-                }} 
-            />
-        </AbsoluteFill>
+  const imgSrc = imageUrl.startsWith("http") ? imageUrl : staticFile(imageUrl);
 
-        {/* Foreground Focus Layer */}
-        <Img 
-            src={imageUrl.startsWith("http") ? imageUrl : staticFile(imageUrl)} 
-            style={{ 
-                transform: `scale(${scale}) translateX(${translateX}px)`,
-                width: "100%",
-                height: "80%", // Keep central focus
-                objectFit: "contain",
-            }} 
-        />
-        
-        {/* Cinematic Vignette & Bottom Mask for Text Readability */}
-        <div className="absolute inset-0" style={{ boxShadow: 'inset 0 0 150px rgba(0,0,0,0.8)' }} />
-        <div className="absolute bottom-0 w-full h-[60%] bg-gradient-to-t from-black via-black/60 to-transparent" />
-    </AbsoluteFill>
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        width: FRAME_WIDTH,
+        height: contentHeight, // CLIPPED — does NOT go into subtitle zone
+        overflow: "hidden",
+        background: "#000",
+      }}
+    >
+      {/* Background blur fill — eliminates black bars */}
+      <Img
+        src={imgSrc}
+        style={{
+          position: "absolute",
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          filter: "blur(40px) brightness(35%)",
+          transform: "scale(1.15)",
+        }}
+      />
+
+      {/* Foreground image with Ken Burns */}
+      <Img
+        src={imgSrc}
+        style={{
+          position: "absolute",
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          transform: `scale(${scale}) translateX(${translateX}px)`,
+          transformOrigin: "center center",
+        }}
+      />
+
+      {/* Vignette overlay */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          boxShadow: "inset 0 0 180px rgba(0,0,0,0.75)",
+        }}
+      />
+
+      {/* Bottom gradient mask — blends into subtitle zone */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: "35%",
+          background: "linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.7) 60%, rgba(0,0,0,0.95) 100%)",
+        }}
+      />
+    </div>
   );
 };

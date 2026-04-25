@@ -11,6 +11,7 @@
     "db:generate": "prisma generate"
   },
   "dependencies": {
+    "@hyperframes/core": "^0.4.24",
     "@prisma/client": "^5.22.0",
     "@radix-ui/react-label": "^2.1.0",
     "@radix-ui/react-select": "^2.1.0",

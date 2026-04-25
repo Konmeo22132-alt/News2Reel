@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<!--
+  HyperFrames Scene Template — AutoVideo News2Reel
+  ================================================
+  Composition: 1080x1920 (9:16 TikTok/Reels)
+  Zones:
+    TOP    : 0-280px   → Breaking news banner + watermark
+    CONTENT: 280-1440px → Article image + animation overlay
+    SUB    : 1440-1920px → 4-word karaoke subtitle
+  
+  Variables (data-variable-values on root):
+    title         - Clickbait title
+    narration     - Full narration text (with <keyword> tags)
+    imageUrl      - Article image URL
+    username      - Channel username
+    animationType - "ImpactCallout"|"DataChart"|"WarningAlert"|"SplitScreenVS"|null
+    animationData - JSON string of animation props
+    isHook        - "true"|"false"
+    sceneDuration - scene duration in seconds (float)
+    audioUrl      - TTS audio file path (relative to public/)
+    words         - JSON array of {text, isKeyword, startSec, endSec}
+-->
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1080px;
+    height: 1920px;
+    overflow: hidden;
+    background: #050510;
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    position: relative;
+  }
+
+  /* ── ZONES ── */
+  #top-zone {
+    position: absolute; top: 0; left: 0; right: 0; height: 280px;
+    z-index: 50;
+    overflow: hidden;
+  }
+  #content-zone {
+    position: absolute; top: 280px; left: 0; right: 0; height: 1160px;
+    z-index: 10;
+    overflow: hidden;
+  }
+  #subtitle-zone {
+    position: absolute; top: 1440px; left: 0; right: 0; height: 480px;
+    z-index: 100;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.92) 100%);
+    border-top: 1px solid rgba(255,255,255,0.05);
+  }
+
+  /* ── BACKGROUND IMAGE ── */
+  #bg-image {
+    position: absolute; inset: 0;
+    width: 1080px; height: 1440px;
+    object-fit: cover;
+    transform-origin: center center;
+  }
+  #bg-blur {
+    position: absolute; inset: 0;
+    width: 100%; height: 1440px;
+    object-fit: cover;
+    filter: blur(30px) brightness(0.3);
+    transform: scale(1.1);
+  }
+  #bg-gradient-overlay {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 520px;
+    background: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.6) 50%, rgba(0,0,0,0.95) 100%);
+    pointer-events: none;
+  }
+  #vignette {
+    position: absolute; inset: 0; width: 1080px; height: 1440px;
+    box-shadow: inset 0 0 200px rgba(0,0,0,0.8);
+    pointer-events: none;
+  }
+
+  /* ── TOP BANNER ── */
+  #breaking-banner {
+    position: absolute; top: 24px; left: 32px;
+    display: flex; flex-direction: column; gap: 14px;
+    opacity: 0; /* GSAP will animate */
+  }
+  #breaking-tag {
+    display: inline-flex; align-items: center; gap: 12px;
+    background: #E53935;
+    border-radius: 6px;
+    padding: 8px 20px;
+    width: fit-content;
+  }
+  #breaking-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: #fff;
+  }
+  #breaking-label {
+    font-size: 26px; font-weight: 800;
+    color: #fff; letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  #breaking-title {
+    font-size: 46px; font-weight: 900;
+    color: #fff; line-height: 1.2;
+    text-shadow: 3px 3px 0 #000, -3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000;
+    max-width: 1000px;
+  }
+
+  /* ── WATERMARK ── */
+  #watermark {
+    position: absolute; top: 0; right: 32px;
+    height: 280px;
+    display: flex; align-items: center; gap: 8px;
+    opacity: 0.55;
+  }
+  #wm-dot { width: 6px; height: 6px; border-radius: 50%; background: #E53935; }
+  #wm-text { font-size: 28px; font-weight: 700; color: #fff; letter-spacing: 1px; }
+
+  /* ── ANIMATION OVERLAYS (in content-zone) ── */
+  #animation-overlay {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; /* GSAP will animate */
+  }
+
+  /* ImpactCallout */
+  .impact-callout {
+    text-align: center;
+    padding: 48px 60px;
+    background: rgba(0,0,0,0.7);
+    border: 2px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    backdrop-filter: blur(8px);
+    max-width: 900px;
+  }
+  .impact-number {
+    font-size: 180px; font-weight: 900;
+    color: #E53935;
+    line-height: 1;
+    letter-spacing: -4px;
+  }
+  .impact-subtext {
+    font-size: 52px; font-weight: 700;
+    color: rgba(255,255,255,0.85);
+    margin-top: 16px;
+  }
+
+  /* DataChart */
+  .data-chart {
+    width: 900px;
+    background: rgba(0,0,0,0.7);
+    border-radius: 16px;
+    padding: 40px 48px;
+    backdrop-filter: blur(8px);
+  }
+  .chart-bar-row { margin-bottom: 28px; }
+  .chart-label { font-size: 36px; font-weight: 700; color: #fff; margin-bottom: 10px; }
+  .chart-track { background: rgba(255,255,255,0.1); border-radius: 4px; height: 28px; overflow: hidden; }
+  .chart-fill { height: 100%; background: #E53935; border-radius: 4px; width: 0%; transition: none; }
+  .chart-val { font-size: 28px; font-weight: 700; color: rgba(255,255,255,0.7); margin-top: 6px; }
+
+  /* SplitScreenVS */
+  .vs-container { display: flex; gap: 24px; align-items: stretch; }
+  .vs-side {
+    flex: 1; padding: 40px 32px;
+    border-radius: 12px; text-align: center;
+    font-size: 48px; font-weight: 900; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 200px;
+  }
+  .vs-left { background: rgba(139,0,0,0.7); }
+  .vs-right { background: rgba(0,59,30,0.7); }
+  .vs-badge {
+    font-size: 56px; font-weight: 900; color: #fff;
+    align-self: center; min-width: 100px; text-align: center;
+  }
+
+  /* WarningAlert */
+  .warning-alert {
+    background: rgba(230,100,0,0.85);
+    border: 3px solid #FF6600;
+    border-radius: 16px;
+    padding: 48px 64px;
+    text-align: center;
+    max-width: 900px;
+    backdrop-filter: blur(4px);
+  }
+  .warning-icon { font-size: 80px; margin-bottom: 20px; }
+  .warning-text { font-size: 64px; font-weight: 900; color: #fff; line-height: 1.2; }
+
+  /* ── KARAOKE SUBTITLE ── */
+  #subtitle-inner {
+    position: absolute; inset: 0;
+    display: flex; flex-wrap: wrap; align-content: flex-start;
+    align-items: center; justify-content: center;
+    gap: 0 18px;
+    padding: 28px 56px 0;
+  }
+  .k-word {
+    font-size: 82px; font-weight: 900;
+    display: inline-block;
+    letter-spacing: -1px;
+    transition: color 0.06s ease, text-shadow 0.06s ease, font-size 0.06s ease;
+  }
+  .k-active       { color: #fff;              font-size: 90px; text-shadow: 4px 4px 0 #000, -4px -4px 0 #000, 4px -4px 0 #000, -4px 4px 0 #000, 0 8px 24px rgba(0,0,0,0.9); }
+  .k-active.k-kw  { color: #FFD700; font-size: 94px; text-shadow: 0 0 24px rgba(255,215,0,0.7), 4px 4px 0 #000, -4px -4px 0 #000; }
+  .k-past         { color: rgba(180,180,180,0.65); font-size: 76px; text-shadow: 2px 2px 0 #000; }
+  .k-future       { color: rgba(110,110,110,0.5);  font-size: 74px; text-shadow: none; }
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+<!-- ════ BACKGROUND LAYERS (0 → CONTENT_MAX_BOTTOM 1440px) ════ -->
+<div id="bg-container" style="position:absolute;top:0;left:0;width:1080px;height:1440px;overflow:hidden;">
+  <img id="bg-blur" src="" alt="" />
+  <img id="bg-image" src="" alt="" />
+  <div id="bg-gradient-overlay"></div>
+  <div id="vignette"></div>
+</div>
+
+<!-- ════ TOP ZONE ════ -->
+<div id="top-zone">
+  <div id="breaking-banner">
+    <div id="breaking-tag">
+      <div id="breaking-dot"></div>
+      <span id="breaking-label">Breaking News</span>
+    </div>
+    <div id="breaking-title"></div>
+  </div>
+  <div id="watermark">
+    <div id="wm-dot"></div>
+    <span id="wm-text"></span>
+  </div>
+</div>
+
+<!-- ════ CONTENT ZONE ════ -->
+<div id="content-zone">
+  <div id="animation-overlay">
+    <!-- populated by JS based on animationType -->
+  </div>
+</div>
+
+<!-- ════ SUBTITLE ZONE ════ -->
+<div id="subtitle-zone">
+  <div id="subtitle-inner">
+    <!-- populated by JS -->
+  </div>
+</div>
+
+<!-- ════ AUDIO ════ -->
+<audio id="scene-audio" data-has-audio="true"></audio>
+
+<!-- ════ GSAP ════ -->
+<script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+
+<script>
+(function() {
+  // ── Read composition variables ──────────────────────────────────────────
+  const root = document.getElementById('root') || document.body;
+  const varAttr = root.getAttribute('data-variable-values') || '{}';
+  let vars = {};
+  try { vars = JSON.parse(varAttr); } catch(e) {}
+
+  const title        = vars.title        || '';
+  const narration    = vars.narration    || '';
+  const imageUrl     = vars.imageUrl     || '';
+  const username     = vars.username     || 'News2Reel';
+  const animType     = vars.animationType || '';
+  const animDataRaw  = vars.animationData || '{}';
+  const isHook       = vars.isHook === 'true';
+  const duration     = parseFloat(vars.sceneDuration || '8');
+  const audioUrl     = vars.audioUrl     || '';
+  const wordsRaw     = vars.words        || '[]';
+  const WORDS_PER_GROUP = 4;
+
+  let animData = {};
+  try { animData = JSON.parse(animDataRaw); } catch(e) {}
+
+  let words = [];
+  try { words = JSON.parse(wordsRaw); } catch(e) {}
+
+  // ── Set images ──────────────────────────────────────────────────────────
+  if (imageUrl) {
+    document.getElementById('bg-image').src = imageUrl;
+    document.getElementById('bg-blur').src  = imageUrl;
+  } else {
+    document.getElementById('bg-container').style.background = 'linear-gradient(160deg, #0a0f18 0%, #020408 100%)';
+    document.getElementById('bg-image').style.display = 'none';
+    document.getElementById('bg-blur').style.display  = 'none';
+  }
+
+  // ── Set watermark ───────────────────────────────────────────────────────
+  document.getElementById('wm-text').textContent = '@' + username;
+
+  // ── Top banner (hook scenes only) ────────────────────────────────────────
+  if (isHook && title) {
+    document.getElementById('breaking-title').textContent = title;
+  } else {
+    document.getElementById('breaking-banner').style.display = 'none';
+  }
+
+  // ── Set audio ───────────────────────────────────────────────────────────
+  if (audioUrl) {
+    document.getElementById('scene-audio').src = audioUrl;
+  }
+
+  // ── Build animation overlay ─────────────────────────────────────────────
+  const overlay = document.getElementById('animation-overlay');
+  if (animType && overlay) {
+    let html = '';
+    if (animType === 'ImpactCallout') {
+      html = `<div class="impact-callout">
+        <div class="impact-number">${animData.text || ''}</div>
+        <div class="impact-subtext">${animData.subtext || ''}</div>
+      </div>`;
+    } else if (animType === 'DataChart') {
+      const items = animData.items || [];
+      const maxVal = Math.max(...items.map(i => i.val || 0), 1);
+      html = `<div class="data-chart">${items.map((item, idx) => `
+        <div class="chart-bar-row">
+          <div class="chart-label">${item.label || ''}</div>
+          <div class="chart-track"><div class="chart-fill" id="bar-${idx}" data-pct="${Math.round((item.val/maxVal)*100)}"></div></div>
+          <div class="chart-val">${item.val}</div>
+        </div>`).join('')}</div>`;
+    } else if (animType === 'SplitScreenVS') {
+      html = `<div class="vs-container">
+        <div class="vs-side vs-left">${animData.leftTitle || ''}</div>
+        <div class="vs-badge">VS</div>
+        <div class="vs-side vs-right">${animData.rightTitle || ''}</div>
+      </div>`;
+    } else if (animType === 'WarningAlert') {
+      html = `<div class="warning-alert">
+        <div class="warning-icon">⚠️</div>
+        <div class="warning-text">${animData.text || 'CẢNH BÁO!'}</div>
+      </div>`;
+    }
+    overlay.innerHTML = html;
+  }
+
+  // ── Build karaoke subtitle ─────────────────────────────────────────────
+  const subtitleEl = document.getElementById('subtitle-inner');
+  if (words.length > 0 && subtitleEl) {
+    subtitleEl.innerHTML = words.map((w, i) =>
+      `<span class="k-word k-future${w.isKeyword ? ' k-kw' : ''}" id="kw-${i}" data-start="${w.startSec}" data-end="${w.endSec}">${w.text}</span>`
+    ).join(' ');
+  }
+
+  // ── GSAP Timeline ─────────────────────────────────────────────────────────
+  const tl = gsap.timeline({ paused: true });
+
+  // 1. Ken Burns on bg image
+  if (imageUrl) {
+    tl.fromTo('#bg-image',
+      { scale: 1.0, x: -15 },
+      { scale: 1.08, x: 15, duration: duration, ease: 'none' },
+      0
+    );
+  }
+
+  // 2. Breaking news banner slide-in (hook only)
+  if (isHook && title) {
+    tl.fromTo('#breaking-banner',
+      { opacity: 0, y: -60 },
+      { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out' },
+      0
+    );
+  }
+
+  // 3. Animation overlay entrance
+  if (animType && overlay.children.length > 0) {
+    tl.fromTo('#animation-overlay',
+      { opacity: 0, scale: 0.85, y: 40 },
+      { opacity: 1, scale: 1.0, y: 0, duration: 0.55, ease: 'back.out(1.4)' },
+      0.15
+    );
+    // DataChart bar fill animation
+    if (animType === 'DataChart') {
+      document.querySelectorAll('.chart-fill').forEach((el, i) => {
+        const pct = el.getAttribute('data-pct') || '0';
+        tl.to(el, { width: pct + '%', duration: 0.8, ease: 'power2.out' }, 0.4 + i * 0.12);
+      });
+    }
+  }
+
+  // 4. Karaoke word-by-word highlight
+  if (words.length > 0) {
+    words.forEach((w, i) => {
+      const el = document.getElementById('kw-' + i);
+      if (!el) return;
+      const startTime = w.startSec || (i / words.length * duration);
+      const endTime   = w.endSec   || ((i + 1) / words.length * duration);
+      const isKw      = w.isKeyword;
+
+      // Activate (becomes active)
+      tl.to(el, {
+        className: `k-word k-active${isKw ? ' k-kw' : ''}`,
+        duration: 0.04,
+        ease: 'none'
+      }, startTime);
+
+      // Deactivate (becomes past)
+      tl.to(el, {
+        className: 'k-word k-past' + (isKw ? ' k-kw' : ''),
+        duration: 0.04,
+        ease: 'none'
+      }, endTime);
+    });
+  }
+
+  // Register timeline for HyperFrames renderer
+  window.__timelines = window.__timelines || {};
+  window.__timelines['news2reel-scene'] = tl;
+
+  // Also set composition duration
+  window.__compositionDuration = duration;
+})();
+</script>
+</body>
+</html>

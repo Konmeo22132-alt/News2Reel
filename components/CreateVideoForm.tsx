@@ -30,7 +30,7 @@ interface CreateVideoFormProps {
 export default function CreateVideoForm({ defaultSources = [] }: CreateVideoFormProps) {
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState("");
-  const [engine, setEngine] = useState<"ffmpeg" | "remotion">("ffmpeg");
+  const [engine, setEngine] = useState<"ffmpeg" | "remotion" | "hyperframes">("ffmpeg");
   const [state, setState] = useState<JobState>({ phase: "idle" });
   const [statusText, setStatusText] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -168,34 +168,65 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
 
           {/* Status display */}
           {state.phase === "done" && (
-            <div
-              className="flex items-center gap-3 p-3 rounded-lg mb-4"
-              style={{
-                background: "rgba(16,185,129,0.08)",
-                border: "1px solid rgba(16,185,129,0.2)",
-              }}
-            >
-              <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-emerald-400">
-                  ✅ Video hoàn thành!
-                </p>
-                {state.resultUrl && (
-                  <a
-                    href={state.resultUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs mt-1"
-                    style={{ color: "#818cf8" }}
-                  >
-                    <ExternalLink className="w-3 h-3" />
-                    Xem video
-                  </a>
-                )}
+            <div className="mb-4 space-y-3">
+              <div
+                className="flex items-center gap-3 p-3 rounded-lg"
+                style={{
+                  background: "rgba(16,185,129,0.08)",
+                  border: "1px solid rgba(16,185,129,0.2)",
+                }}
+              >
+                <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-emerald-400">✅ Video hoàn thành!</p>
+                  {state.resultUrl && (
+                    <a
+                      href={state.resultUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs mt-1"
+                      style={{ color: "#818cf8" }}
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      Tải xuống / Mở mới
+                    </a>
+                  )}
+                </div>
+                <button onClick={reset} className="btn btn-ghost text-xs py-1 px-3">Tạo tiếp</button>
               </div>
-              <button onClick={reset} className="btn btn-ghost text-xs py-1 px-3">
-                Tạo tiếp
-              </button>
+              {/* Inline video preview */}
+              {state.resultUrl && (
+                <div className="rounded-lg overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
+                  <video
+                    src={state.resultUrl}
+                    controls
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    style={{
+                      width: "100%",
+                      maxHeight: "420px",
+                      background: "#000",
+                      display: "block",
+                    }}
+                  />
+                  <div
+                    className="flex items-center justify-between px-3 py-2 text-xs"
+                    style={{ background: "var(--surface-2)", color: "var(--text-muted)" }}
+                  >
+                    <span>Preview inline · {engine.toUpperCase()} engine</span>
+                    <a
+                      href={state.resultUrl}
+                      download
+                      className="inline-flex items-center gap-1"
+                      style={{ color: "#818cf8" }}
+                    >
+                      <ExternalLink className="w-3 h-3" /> Tải xuống
+                    </a>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -370,17 +401,40 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
                 <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>
                   Rendering Engine
                 </label>
-                <div className="flex gap-2">
-                  <label className="flex-1 flex items-center gap-2 p-2 rounded cursor-pointer border hover:bg-gray-800/30 transition-colors"
-                    style={{ borderColor: engine === "ffmpeg" ? "var(--primary-color, #6366f1)" : "var(--border)" }}>
-                    <input type="radio" name="engine" value="ffmpeg" checked={engine === "ffmpeg"} onChange={() => setEngine("ffmpeg")} className="accent-indigo-500" />
-                    <span className="text-sm">FFmpeg (Fast)</span>
-                  </label>
-                  <label className="flex-1 flex items-center gap-2 p-2 rounded cursor-pointer border hover:bg-gray-800/30 transition-colors"
-                    style={{ borderColor: engine === "remotion" ? "var(--primary-color, #6366f1)" : "var(--border)" }}>
-                    <input type="radio" name="engine" value="remotion" checked={engine === "remotion"} onChange={() => setEngine("remotion")} className="accent-indigo-500" />
-                    <span className="text-sm">Remotion (HQ Viral)</span>
-                  </label>
+                <div className="flex flex-col gap-1.5">
+                  {([
+                    { value: "ffmpeg",       label: "FFmpeg",       badge: "Nhanh",     desc: "Server-side, không cần Chrome",        badgeColor: "#10b981" },
+                    { value: "remotion",     label: "Remotion",     badge: "HQ Viral",  desc: "React component, Ken Burns + karaoke", badgeColor: "#818cf8" },
+                    { value: "hyperframes",  label: "HyperFrames",  badge: "Cinematic", desc: "HTML/GSAP, animation đẹp nhất",         badgeColor: "#f59e0b" },
+                  ] as const).map(({ value, label, badge, desc, badgeColor }) => (
+                    <label
+                      key={value}
+                      className="flex items-center gap-3 p-2.5 rounded cursor-pointer border transition-colors hover:bg-gray-800/20"
+                      style={{
+                        borderColor: engine === value ? badgeColor + "66" : "var(--border)",
+                        background: engine === value ? badgeColor + "0d" : "transparent",
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="engine"
+                        value={value}
+                        checked={engine === value}
+                        onChange={() => setEngine(value)}
+                        className="accent-indigo-500 shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{label}</span>
+                          <span
+                            className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                            style={{ background: badgeColor + "22", color: badgeColor }}
+                          >{badge}</span>
+                        </div>
+                        <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{desc}</p>
+                      </div>
+                    </label>
+                  ))}
                 </div>
               </div>
 
@@ -400,7 +454,7 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
               </div>
 
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Pipeline: Thu thập bài → AI tạo kịch bản → FFmpeg render video → Đăng TikTok
+                Pipeline: Scrape bài → AI kịch bản → {engine === "hyperframes" ? "HyperFrames HTML/GSAP" : engine === "remotion" ? "Remotion React" : "FFmpeg"} render → Đăng TikTok
               </p>
             </form>
           )}

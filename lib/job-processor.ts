@@ -9,6 +9,7 @@ import { VideoJobModel } from "./models/VideoJob";
 import { scrapeArticle } from "./scraper";
 import { generateScript } from "./ai";
 import { renderVideo } from "./video-renderer";
+import type { HyperFramesRenderOptions } from "./video-renderer-hyperframes";
 import { generateSocialCards } from "./social-card-generator";
 import { publishToTikTok } from "./tiktok";
 import type { AppConfig } from "./types";
@@ -47,7 +48,7 @@ async function dbLog(jobId: string, msg: string, step?: string, progress?: numbe
 export async function processVideoJob(
   jobId: string,
   sourceUrl: string,
-  engine: "ffmpeg" | "remotion",
+  engine: "ffmpeg" | "remotion" | "hyperframes",
   config: AppConfig,
   log: (msg: string) => void = console.log
 ): Promise<void> {
@@ -79,7 +80,7 @@ export async function processVideoJob(
       customPrompt: config.customPrompt,
       aiProvider: config.aiProvider,
       aiModel: config.aiModel,
-      engine,
+      engine: engine === "hyperframes" ? "ffmpeg" : engine, // HyperFrames uses ffmpeg-compatible script
     });
     await track(`Script: "${script.clickbait_title}"`, "AI viết kịch bản", 20);
 
@@ -96,6 +97,30 @@ export async function processVideoJob(
         const overallPercent = Math.round(25 + percent * 0.65);
         track(`${step} (${percent}%)`, "Render Video", overallPercent);
       }, article.imageUrls ?? [], socialCards);
+    } else if (engine === "hyperframes") {
+      await track(`HyperFrames render — HTML/GSAP cinematic engine...`, "Render Video", 25);
+      const { renderVideoHyperFrames } = await import("./video-renderer-hyperframes");
+      // Build per-scene audio paths and durations from script
+      const audioPaths: string[] = [];
+      const audioDurations: number[] = [];
+      for (let i = 0; i < script.scenes.length; i++) {
+        const scene = script.scenes[i];
+        const audioUrl = (scene as any).audioUrl as string | undefined;
+        const ap = audioUrl
+          ? require("path").join(process.cwd(), "public", audioUrl.startsWith("/") ? audioUrl.slice(1) : audioUrl)
+          : "";
+        audioPaths.push(ap);
+        audioDurations.push(scene.durationInFrames ? scene.durationInFrames / 30 : 8);
+      }
+      const hfOpts: HyperFramesRenderOptions = {
+        script,
+        jobId,
+        config: config as any,
+        audioPaths,
+        audioDurations,
+      };
+      videoPath = await renderVideoHyperFrames(hfOpts);
+      await track(`HyperFrames render xong`, "Render Video", 88);
     } else {
       const imgCount = article.imageUrls?.length ?? 0;
       await track(`FFmpeg render (${config.videoQuality}) — ${imgCount} ảnh bài báo...`, "Render Video", 25);

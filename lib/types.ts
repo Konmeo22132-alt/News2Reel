@@ -44,12 +44,19 @@ export type VideoScript = {
 
 export type ScriptScene = {
   narration: string;
+  // Shared image field — URL ảnh thực tế từ scraper (AI chọn phù hợp nhất cho scene)
+  context_image_url?: string;
+  // Convenience aliases for HyperFrames renderer
+  imageUrl?: string;          // alias for context_image_url
+  audioUrl?: string;          // TTS audio file URL (/api/stream/... or absolute path)
+  isHook?: boolean;           // is this the hook scene
+  isCTA?: boolean;            // is this the call-to-action scene
   // FFmpeg fields
   duration?: number;
   context_image_index?: number;
   // Remotion fields
   durationInFrames?: number;
-  animationType?: "SocialTweet" | "Earth3D" | "HackerTerminal";
+  animationType?: "SocialTweet" | "Earth3D" | "HackerTerminal" | "ImpactCallout" | "PointToPoint" | "SplitScreenVS" | "DataChart" | "WarningAlert";
   animationProps?: any;
 };
 

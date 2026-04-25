@@ -1,39 +1,21 @@
 /**
- * News Scraper — extracts article title + content from a URL.
- *
- * Strategy:
- *   1. Try native fetch + cheerio (fast, works for server-rendered sites)
- *   2. If content < 200 chars (likely JS-rendered), fall back to fetching
- *      AMP version or Google cache.
- *
- * Works well with: vnexpress.net, tuoitre.vn, thanhnien.vn, dantri.com.vn,
- *                  baomoi.com, vietnamnet.vn, 24h.com.vn
+ * News Scraper — extracts article title + content + ALL images from a URL.
  */
 
 import type { ScrapedArticle } from "./types";
 
-// Content selectors — ordered from most to least specific
-// Vietnamese news sites use site-specific class names
 const CONTENT_SELECTORS = [
-  // VnExpress
   ".fck_detail",
   ".detail-content .fck_detail",
-  // Tuổi Trẻ
   ".detail-content",
   ".detail__content",
-  // Thanh Niên
   ".detail-content__body",
-  // Dân Trí
   ".singular-content",
   ".dt-news__content",
-  // VietnamNet
   ".content-detail",
   ".maincontent",
-  // 24h
   ".knc-content",
-  // Báo Mới
   ".baomoi-content",
-  // Generic
   "article .content-detail",
   "article .article-body",
   '[class*="article-content"]',
@@ -51,18 +33,19 @@ const CONTENT_SELECTORS = [
   "#content",
 ];
 
+// NOTE: "figure" và "iframe" đã bị xóa khỏi đây — cần giữ lại để extract ảnh
 const NOISE_SELECTORS = [
   "script", "style", "nav", "header", "footer", "aside",
   ".advertisement", ".ads", '[class*="ad-"]', '[class*="popup"]',
   '[class*="cookie"]', '[class*="share"]', '[class*="social"]',
-  '[class*="related"]', ".sidebar", ".sidebar-2", "#sidebar", "figure", "iframe",
-  // VnExpress specific noise
+  '[class*="related"]', ".sidebar", ".sidebar-2", "#sidebar",
   ".box-morelink", ".related_news", ".block_related", ".block-related",
   ".tag-events", ".box-tinlienquan", ".box-tinlienquanv2",
   ".tab-comment", ".comment-section",
-  // Generic
   "[class*='author-box']", "[class*='recommend']", "[class*='newsletter']",
 ];
+
+const IMG_ATTRS = ["src", "data-src", "data-original", "data-lazy-src", "data-srcset"];
 
 function cleanText(raw: string): string {
   return raw
@@ -72,12 +55,20 @@ function cleanText(raw: string): string {
     .trim();
 }
 
+function normalizeUrl(src: string): string {
+  try {
+    const u = new URL(src);
+    ["utm_source", "utm_medium", "utm_campaign", "fbclid"].forEach(p => u.searchParams.delete(p));
+    return u.toString();
+  } catch {
+    return src;
+  }
+}
+
 async function fetchHtml(url: string): Promise<string> {
   const res = await fetch(url, {
     headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
       Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
       "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
       "Accept-Encoding": "gzip, deflate, br",
@@ -96,7 +87,6 @@ async function fetchHtml(url: string): Promise<string> {
   return res.text();
 }
 
-/** Try fetching Google AMP version for JS-heavy sites */
 async function fetchAmpVersion(url: string): Promise<string | null> {
   try {
     const ampUrl = url.replace("://", "://amp.") + (url.includes("?") ? "&" : "?") + "amp=1";
@@ -109,33 +99,82 @@ async function fetchAmpVersion(url: string): Promise<string | null> {
   return null;
 }
 
-async function extractContent(html: string): Promise<{ title: string; content: string; imageUrls: string[] }> {
+async function extractContent(html: string): Promise<{
+  title: string;
+  content: string;
+  imageUrls: string[];
+}> {
   const { load } = await import("cheerio");
   const $ = load(html);
 
-  // ── Extract images BEFORE removing noise (need figure/img tags still present) ──
+  // Tìm content root trước để scope ảnh vào đúng phần bài viết
+  let contentRoot = "body";
+  for (const sel of CONTENT_SELECTORS) {
+    try {
+      if ($(sel).first().length) {
+        contentRoot = sel;
+        break;
+      }
+    } catch { /* skip */ }
+  }
+
+  // ── Extract images ────────────────────────────────────────────────────────
+  const seen = new Set<string>();
   const imageUrls: string[] = [];
 
-  // Priority 1: OG/Twitter card image — always high resolution
-  const ogImage = $("meta[property='og:image']").attr("content") ||
-    $("meta[name='twitter:image']").attr("content");
-  if (ogImage && ogImage.startsWith("http")) imageUrls.push(ogImage);
+  const addImage = (src: string | undefined) => {
+    if (!src) return;
+    const url = src.startsWith("//") ? "https:" + src : src;
+    if (!url.startsWith("http")) return;
+    const normalized = normalizeUrl(url);
+    if (seen.has(normalized)) return;
+    seen.add(normalized);
+    imageUrls.push(normalized);
+  };
 
-  // Priority 2: article body images (VNExpress, TuoiTre, etc.)
-  $(".fck_detail img, .detail-content img, article img, .article-body img").each((_, el) => {
-    const src = $(el).attr("src") || $(el).attr("data-src") || $(el).attr("data-original") || "";
-    if (src.startsWith("http") && !imageUrls.includes(src)) {
-      const w = parseInt($(el).attr("width") || "999");
-      if (w === 1 || (w > 0 && w < 100)) return; // skip 1px trackers and tiny thumbnails
-      imageUrls.push(src);
-      if (imageUrls.length >= 6) return false; // max 6 images
+  // Tất cả <img> trong body bài viết, kiểm tra nhiều lazy-load attributes
+  $(`${contentRoot} img`).each((_, el) => {
+    // Bỏ qua pixel tracker và icon nhỏ
+    const w = parseInt($(el).attr("width") || "0");
+    const h = parseInt($(el).attr("height") || "0");
+    if ((w > 0 && w < 50) || (h > 0 && h < 50)) return;
+
+    const alt = ($(el).attr("alt") || "").toLowerCase();
+    if (alt === "logo" || alt === "icon") return;
+
+    for (const attr of IMG_ATTRS) {
+      const val = $(el).attr(attr);
+      if (val && !val.includes("data:image")) {
+        // srcset chứa nhiều URL — lấy cái lớn nhất (cuối cùng)
+        if (attr === "data-srcset" || (attr === "src" && val.includes(" "))) {
+          const largest = val.trim().split(",").pop()?.trim().split(" ")[0];
+          addImage(largest);
+        } else {
+          addImage(val);
+        }
+        break;
+      }
     }
   });
 
-  // Remove noise
+  // <figure> images (VnExpress wrap ảnh chính trong <figure>)
+  $(`${contentRoot} figure img`).each((_, el) => {
+    for (const attr of IMG_ATTRS) {
+      const val = $(el).attr(attr);
+      if (val) { addImage(val); break; }
+    }
+  });
+
+  // OG/Twitter meta — thêm vào cuối, deduplicate tự động
+  const ogImage =
+    $("meta[property='og:image']").attr("content") ||
+    $("meta[name='twitter:image']").attr("content");
+  addImage(ogImage);
+
+  // ── Remove noise cho text extraction ─────────────────────────────────────
   $(NOISE_SELECTORS.join(", ")).remove();
 
-  // Extract title
+  // ── Title ─────────────────────────────────────────────────────────────────
   const title =
     $("meta[property='og:title']").attr("content") ||
     $("meta[name='twitter:title']").attr("content") ||
@@ -143,27 +182,24 @@ async function extractContent(html: string): Promise<{ title: string; content: s
     $("title").text().split("|")[0] ||
     "Bài viết";
 
-  // Find best content block
+  // ── Content ───────────────────────────────────────────────────────────────
   let content = "";
   let bestLen = 0;
   for (const sel of CONTENT_SELECTORS) {
     try {
       const el = $(sel).first();
       if (!el.length) continue;
-      // Clone and remove noise from the candidate
       const clone = el.clone();
       clone.find(NOISE_SELECTORS.join(", ")).remove();
       const text = cleanText(clone.text());
       if (text.length > 300 && text.length > bestLen) {
         content = text;
         bestLen = text.length;
-        // If we get a substantial amount, stop early
         if (bestLen > 800) break;
       }
-    } catch { /* skip bad selectors */ }
+    } catch { /* skip */ }
   }
 
-  // Fallback: collect all <p> tags with meaningful content
   if (!content || content.length < 200) {
     const paragraphs: string[] = [];
     $("p").each((_, el) => {
@@ -173,15 +209,12 @@ async function extractContent(html: string): Promise<{ title: string; content: s
     content = paragraphs.join("\n\n");
   }
 
-  // Last resort: get description from JSON-LD
   if (!content || content.length < 100) {
     try {
       const ldJson = $("script[type='application/ld+json']").first().html();
       if (ldJson) {
         const data = JSON.parse(ldJson);
-        if (data.description && data.description.length > 50) {
-          content = data.description;
-        }
+        if (data.description && data.description.length > 50) content = data.description;
       }
     } catch { /* ignore */ }
   }
@@ -194,11 +227,9 @@ async function extractContent(html: string): Promise<{ title: string; content: s
 }
 
 export async function scrapeArticle(url: string): Promise<ScrapedArticle> {
-  // Try primary fetch
   let html = await fetchHtml(url);
   let { title, content, imageUrls } = await extractContent(html);
 
-  // If content seems empty or too short (JS-rendered site), try AMP fallback
   if (content.length < 250) {
     const ampHtml = await fetchAmpVersion(url);
     if (ampHtml) {
@@ -220,7 +251,6 @@ export async function scrapeArticle(url: string): Promise<ScrapedArticle> {
   return { title, content, url, imageUrls };
 }
 
-/** Pick a random source from JSON array string */
 export function pickRandomSource(newsSourcesJson: string): string | null {
   try {
     const sources: string[] = JSON.parse(newsSourcesJson);

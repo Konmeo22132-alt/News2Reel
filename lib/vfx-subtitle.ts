@@ -37,7 +37,7 @@ export interface ASSStyle {
 // IMPORTANT: Font must be installed on the VPS. DejaVu is guaranteed on Ubuntu.
 export const DEFAULT_ASS_STYLE: ASSStyle = {
   font: "DejaVu Sans",
-  fontSize: 110,
+  fontSize: 82,
   primaryColor: ASS_COLORS.white,
   outlineColor: ASS_COLORS.black,
   shadowColor: ASS_COLORS.black,
@@ -153,6 +153,19 @@ Style: Keyword,${style.font},${style.fontSize + 8},&H00FFFFFF,${style.outlineCol
 `;
 }
 
+/**
+ * Style section for the 4-word karaoke subtitle (no box, clean look).
+ */
+function generateKaraokeStyleSection(style: ASSStyle): string {
+  // BorderStyle=1 = outline only (no opaque box — words have inline color control)
+  // Alignment=2 = bottom-center
+  return `[V4+ Styles]
+Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
+Style: KaraokeBase,${style.font},${style.fontSize},&H00FFFFFF,&H00000000,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,4,2,2,60,60,80,1
+
+`;
+}
+
 function generateDialogueEvents(
   plainText: string,
   keywords: ParsedText["keywords"],
@@ -189,20 +202,20 @@ function generateDialogueEvents(
   return dialogue;
 }
 
-// ─── Bouncing Karaoke ASS (Retention Booster #1) ─────────────────────────────
-
 /**
- * Generate word-by-word bouncing karaoke ASS subtitles.
+ * Generate 4-word karaoke ASS subtitles — "Google Podcast" style.
  *
- * Effect per word:
- *   t=0ms    → scale 0% (invisible)
- *   t=0-100ms → scale 0%→120% (pop in + overshoot)
- *   t=100-250ms → scale 120%→100% (settle back)
- *   t=end-100ms → scale 100%→0% (fade out)
+ * Design:
+ *   - Words grouped into chunks of 4
+ *   - Entire chunk stays visible at BOTTOM of screen the whole time
+ *   - The word currently being spoken: bright white / keyword = yellow
+ *   - Words already spoken: slightly dimmed (shows progress)
+ *   - Words not yet spoken: gray / muted
+ *   - No bounce, no pop animations — clean, readable, professional
  *
- * @param narration  Text with optional <keyword> tags
- * @param audioDuration  Total audio duration in seconds
- * @param style  Style overrides (fontSize, color, etc.)
+ * @param narration     Text with optional \u003ckeyword\u003e tags
+ * @param audioDuration Total audio duration in seconds
+ * @param style         Style overrides
  */
 export function generateWordByWordASS(
   narration: string,
@@ -211,42 +224,69 @@ export function generateWordByWordASS(
 ): string {
   const finalStyle = { ...DEFAULT_ASS_STYLE, ...style };
   const { plain, keywords } = parseNarration(narration);
+  const words = plain.trim().split(/\s+/).filter(Boolean);
+
+  const header = generateASSHeader();
+  const styleSection = generateKaraokeStyleSection(finalStyle);
+  const eventsHeader = "[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n";
+
+  if (words.length === 0) return header + styleSection + eventsHeader;
+
   const timings = calculateWordTimings(plain, audioDuration);
 
-  let ass = generateASSHeader();
-  ass += generateStyleSection(finalStyle);
-  ass += "[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n";
+  const WORDS_PER_GROUP = 4;
+  // Y position: near bottom — ~88% of 1920px height, safe above navigation bars
+  const subY = 1680;
+  const subX = 540; // center X for 1080px wide video
 
-  // 1580 = bottom safe zone for 1920px tall video (TikTok standard subtitle position)
-  // Keeping it above 1700 to avoid being cut on smaller screens
-  const subY = 1580;
+  let events = "";
 
-  for (const timing of timings) {
-    const startTime = formatASSTime(timing.start);
-    const endTime = formatASSTime(timing.end);
-    const wordDurationMs = Math.round((timing.end - timing.start) * 1000);
+  for (let gi = 0; gi < timings.length; gi += WORDS_PER_GROUP) {
+    const groupTimings = timings.slice(gi, gi + WORDS_PER_GROUP);
 
-    // Check if keyword
-    const isKeyword = keywords.some((k) => k.word === timing.word);
-    const styleName = isKeyword ? "Keyword" : "Default";
+    // For each word in the group, emit one Dialogue line during that word's time
+    for (let wi = 0; wi < groupTimings.length; wi++) {
+      const activeWord = groupTimings[wi];
+      const lineStart = formatASSTime(activeWord.start);
+      const lineEnd = formatASSTime(activeWord.end);
 
-    // Bouncing animation sequence:
-    //  Phase 1 (0 → 80ms):  scale 0 → 120  (pop in)
-    //  Phase 2 (80 → 200ms): scale 120 → 100 (settle)
-    //  Phase 3 (wordDuration-100 → wordDuration): scale 100 → 0 (fade out)
-    const fadeInEnd = Math.min(80, wordDurationMs / 3);
-    const settleEnd = Math.min(200, (wordDurationMs * 2) / 3);
-    const fadeOutStart = Math.max(wordDurationMs - 100, (wordDurationMs * 2) / 3);
+      // Build styled text: all words in group, word-by-word colored
+      let styledText = `{\\pos(${subX},${subY})\\an2}`;
 
-    const effect = isKeyword
-      ? `{\\pos(540,${subY})\\an5\\fscx0\\fscy0\\t(${fadeInEnd},${settleEnd},\\fscx130\\fscy130)\\t(${settleEnd},${fadeOutStart},\\fscx100\\fscy100)\\t(${fadeOutStart},${wordDurationMs},\\fscx0\\fscy0)}`
-      : `{\\pos(540,${subY})\\an5\\fscx0\\fscy0\\t(${fadeInEnd},${settleEnd},\\fscx120\\fscy120)\\t(${settleEnd},${fadeOutStart},\\fscx100\\fscy100)\\t(${fadeOutStart},${wordDurationMs},\\fscx0\\fscy0)}`;
+      for (let ti = 0; ti < groupTimings.length; ti++) {
+        const w = groupTimings[ti].word;
+        const isActive = ti === wi;
+        const isPast = ti < wi;
+        const isKeyword = keywords.some((k) => k.word === w);
 
-    ass += `Dialogue: 0,${startTime},${endTime},${styleName},,0,0,0,,${effect}${timing.word}\n`;
+        if (isActive) {
+          if (isKeyword) {
+            // Being spoken + keyword: yellow, bold, outline glow
+            styledText += `{\\c&H00FFFF&\\3c&H000080&\\4c&H80000000&\\blur2\\fscx112\\fscy112\\b1}${w}{\\r}`;
+          } else {
+            // Being spoken: white, bold
+            styledText += `{\\c&H00FFFFFF&\\3c&H00000000&\\4c&H80000000&\\blur0\\fscx108\\fscy108\\b1}${w}{\\r}`;
+          }
+        } else if (isPast) {
+          // Already spoken: slightly dimmed gray
+          styledText += `{\\c&H00CCCCCC&\\3c&H00000000&\\4c&H00000000&\\blur0\\fscx92\\fscy92\\b0}${w}{\\r}`;
+        } else {
+          // Not yet spoken: dark gray, muted
+          styledText += `{\\c&H00808080&\\3c&H00000000&\\4c&H00000000&\\blur0\\fscx88\\fscy88\\b0}${w}{\\r}`;
+        }
+
+        // Space between words (except last)
+        if (ti < groupTimings.length - 1) styledText += " ";
+      }
+
+      events += `Dialogue: 0,${lineStart},${lineEnd},KaraokeBase,,0,0,0,,${styledText}\n`;
+    }
   }
 
-  return ass;
+  return header + styleSection + eventsHeader + events;
 }
+
+
 
 // ─── Animated Gradient Background (Retention Booster #3) ───────────────────
 
@@ -412,10 +452,10 @@ function hexToRGB(hex: string): { r: number; g: number; b: number } {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return result
     ? {
-        r: parseInt(result[1], 16),
-        g: parseInt(result[2], 16),
-        b: parseInt(result[3], 16),
-      }
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16),
+    }
     : { r: 0, g: 0, b: 0 };
 }
 

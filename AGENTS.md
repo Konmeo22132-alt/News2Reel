@@ -10,7 +10,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 > **Mục đích**: File này lưu lại toàn bộ kiến trúc, quy ước và trạng thái dự án để AI Agent (Antigravity/Gemini/Claude) có thể tiếp tục làm việc nhanh chóng mà không cần đọc lại toàn bộ code.
 >
-> **Cập nhật lần cuối**: 2026-04-16
+> **Cập nhật lần cuối**: 2026-04-25 (Session 3 — HOÀN TẤT TODO)
 
 ---
 
@@ -269,7 +269,30 @@ cd /var/www/News2Reel && git fetch origin && git reset --hard origin/main && rm 
 
 ---
 
-## 12. Trạng thái & Ghi chú
+## 12. Remotion — Layout Zone System
+
+```
+Frame: 1080 x 1920px
+┌─────────────────────┐ 0px
+│   TOP ZONE (280px)  │ ← Breaking news banner, watermark (@channel)
+├─────────────────────┤ 280px
+│                     │
+│  CONTENT ZONE       │ ← NewsPhoto (CLIPPED HERE), animation overlays
+│  (1160px)           │   ImpactCallout, SocialTweet, DataChart, v.v.
+│                     │
+├─────────────────────┤ 1440px  ← CONTENT_MAX_BOTTOM
+│  SUBTITLE ZONE      │ ← KaraokeSubtitle ONLY — SACRED, nothing else
+│  (480px)            │   Semi-transparent bar, 4-word karaoke
+└─────────────────────┘ 1920px
+```
+
+**File constants**: `remotion/constants/layout.ts` — import `ZONES`, `FONT_SIZES`, `ANIM`
+
+**Rule**: Mọi component PHẢI respect zone của mình. ContentZone có `overflow: hidden` hard clip.
+
+---
+
+## 13. Trạng thái & Ghi chú
 
 ### Đã hoàn thành ✅:
 - [x] MongoDB migration (từ SQLite/Prisma)
@@ -281,32 +304,45 @@ cd /var/www/News2Reel && git fetch origin && git reset --hard origin/main && rm 
 - [x] Dark theme design system
 - [x] SSR-safe date rendering (ClientDate component)
 - [x] Mobile responsive sidebar
+- [x] Vision AI: multimodal + auto-fallback text-only nếu 400
+- [x] Scraper v2: extract tất cả ảnh (lazy-load, figure, OG meta)
+- [x] Remotion Layout Zone System: TopZone/ContentZone/SubtitleZone
+- [x] KaraokeSubtitle: 4-word group, word-level highlight, bottom zone cố định
+- [x] FFmpeg v3: Ken Burns, BGM -18dB, watermark, Breaking News lower-third, xfade transition
+- [x] B-Roll seamless loop: `setpts=PTS-STARTPTS` + `fps=30` + `shortest=1`
+- [x] **HyperFrames Engine**: HTML/GSAP render → headless Chrome → FFmpeg mux
+- [x] **Video preview inline**: `<video>` player trong CreateVideoForm khi render xong
+- [x] **Settings validation**: validate API key + "Test kết nối" button live
+- [x] **Cron endpoint**: `POST /api/cron/auto-generate` Bearer auth + daily limit guard
+- [x] **Cross-dissolve**: xfade 0.25s giữa scenes (FFmpeg), fallback plain concat
 
 ### Cần lưu ý ⚠️:
-- Prisma files vẫn còn (legacy) — KHÔNG sử dụng, có thể xóa
+- Prisma/SQLite files vẫn còn (legacy) — KHÔNG sử dụng, có thể xóa
 - TikTok auto-post cần OAuth access_token (chưa có OAuth flow UI)
 - Google TTS có thể bị rate-limit nếu tạo nhiều video liên tục
-- FFmpeg: Bắt buộc phải được cài đặt trên VPS (Ubuntu: `apt install ffmpeg`) để library sử dụng được format nội bộ `lavfi` tạo background video. `ffmpeg-static` đi kèm NPM không hỗ trợ `lavfi`.
-- dev.db (SQLite) vẫn còn trong root — legacy, có thể xóa
+- FFmpeg: Bắt buộc trên VPS (`apt install ffmpeg`) để dùng `lavfi`, `zoompan`, `xfade`, `geq`
+- `zoompan` chậm trên CPU yếu — cân nhắc skip nếu VPS low-spec
+- HyperFrames: cần `npx playwright install chromium` trên VPS trước khi dùng
+- Vision API chỉ hoạt động với model multimodal — text-only auto-fallback
+- **Node.js 22+ bắt buộc** cho HyperFrames CLI
 
 ### TODO / Planned:
-- [ ] TikTok OAuth flow UI
-- [ ] Scheduled/cron video generation
-- [ ] Video preview trong admin panel
-- [ ] Bulk video creation
-- [ ] Analytics dashboard
+- [ ] TikTok OAuth flow UI (high priority)
+- [ ] Bulk video creation (queue n nhiều URL một lúc)
+- [ ] Analytics dashboard (view counts, completion rate)
+- [ ] Test HyperFrames trên VPS Ubuntu thực tế
 
 ---
 
-## 13. Changelog
+## 14. Changelog
 
-| Ngày       | Thay đổi                                                     |
-|------------|---------------------------------------------------------------|
-| 2026-04-16 | **Video Renderer v2**: Thêm 4 Retention Boosters cho Tech News format. (1) Bouncing Karaoke subtitles — word-by-word scale animation 0%→120%→100%, keyword highlight vàng. (2) Dynamic Icon — pop-in + floating sine wave. (3) Animated Gradient — breathing effect với geq + time sin/cos. (4) BGM/SFX layer — epic bgm tự động detect. Fix filter_complex input ordering, xóa unused variables (`os`, `totalInputs`). |
-| 2026-04-16 | Build hệ thống Real-time Pipeline UI. VideoJob lưu thêm mảng `logs`, `currentStep`, `errorDetails`. CreateVideoForm poll API mỗi 3 giây hiện console log.|
-| 2026-04-16 | Fix pipeline: Scraper hỗ trợ VNExpress + Multi-provider AI (Groq/Beeknoee) + JSON repair mechanism + Prefer System FFmpeg for `lavfi`. Lệnh deploy update `pm2` |
-| 2026-04-15 | Tạo AGENTS.md — ghi lại toàn bộ kiến trúc dự án lần đầu     |
-| 2026-04-15 | Migrate AI API từ Claude sang Beeknoee.
-| 2026-04-11 | Migrate từ SQLite/Prisma sang MongoDB/Mongoose                |
-| 2026-04-11 | Fix hydration errors với ClientDate component                 |
-| 2026-04-08 | Khởi tạo dự án AutoVideo Admin Panel                         |
+| Ngày       | Thay đổi |
+|------------|----------|
+| 2026-04-25 | **Session 3 — HOÀN TẤT TODO**: B-Roll seamless loop (`setpts+fps=30+shortest`). Breaking News lower-third trong FFmpeg (BREAKING red box + title fade). Cron endpoint `POST /api/cron/auto-generate` (Bearer auth, daily limit). `.env.example` cập nhật `CRON_SECRET`, `FFMPEG_PATH`. README + AGENTS.md đầy đủ. Git push. |
+| 2026-04-25 | **Session 2 — HyperFrames + UI**: HyperFrames Engine (HTML/GSAP, `@hyperframes/core`). Inline video preview khi render xong. Settings validation + Test kết nối. `/api/test-ai-connection`. Cross-dissolve xfade 0.25s. |
+| 2026-04-25 | **Session 1 — Layout + Subtitle**: Remotion Layout Zone System (`layout.ts`). KaraokeSubtitle 4-word group. FFmpeg v3: Ken Burns, BGM -18dB, watermark. AI Vision fallback. Scraper v2. |
+| 2026-04-16 | **Video Renderer v2**: Bouncing Karaoke subtitles, Dynamic Icon, Animated Gradient, BGM/SFX layer. Real-time Pipeline UI (logs, currentStep, errorDetails). |
+| 2026-04-16 | Fix pipeline: Scraper VNExpress, Multi-provider AI, JSON repair, Prefer System FFmpeg. |
+| 2026-04-15 | Tạo AGENTS.md. Migrate AI từ Claude sang Beeknoee. |
+| 2026-04-11 | Migrate từ SQLite/Prisma sang MongoDB/Mongoose. Fix hydration errors. |
+| 2026-04-08 | Khởi tạo dự án AutoVideo Admin Panel. |

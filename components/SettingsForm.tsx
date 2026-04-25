@@ -79,6 +79,8 @@ export default function SettingsForm({ config }: { config: AppConfig }) {
   const [tab, setTab] = useState<Tab>("ai");
   const [isPending, startTransition] = useTransition();
   const [toast, setToast] = useState<ToastState>(null);
+  const [validationErr, setValidationErr] = useState<string | null>(null);
+  const [testingConn, setTestingConn] = useState(false);
 
   // Show-password toggles
   const [showDk, setShowDk] = useState(false);
@@ -111,6 +113,13 @@ export default function SettingsForm({ config }: { config: AppConfig }) {
   };
 
   const save = () => {
+    // Client-side validation
+    if (!aiApiKey.trim()) {
+      setValidationErr("API Key không được để trống. Hãy nhập API key trước khi lưu.");
+      setTab("ai");
+      return;
+    }
+    setValidationErr(null);
     startTransition(async () => {
       const sources = newsSources
         .split("\n")
@@ -135,6 +144,34 @@ export default function SettingsForm({ config }: { config: AppConfig }) {
       const result = await updateConfig(data);
       notify(result.message, result.success);
     });
+  };
+
+  const testConnection = async () => {
+    if (!aiApiKey.trim()) {
+      notify("Hãy nhập API Key trước khi test", false);
+      return;
+    }
+    setTestingConn(true);
+    try {
+      const baseUrl = aiProvider === "groq"
+        ? "https://api.groq.com/openai"
+        : "https://platform.beeknoee.com/api/v1";
+      const res = await fetch(`/api/test-ai-connection`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey: aiApiKey, baseUrl, model: aiModel || undefined }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        notify(`✅ Kết nối thành công! Model: ${data.model || "OK"}`, true);
+      } else {
+        notify(`❌ Lỗi: ${data.error || "Không thể kết nối"}`, false);
+      }
+    } catch {
+      notify("Không thể kết nối — kiểm tra URL và key", false);
+    } finally {
+      setTestingConn(false);
+    }
   };
 
   const labelStyle = {
@@ -221,9 +258,10 @@ export default function SettingsForm({ config }: { config: AppConfig }) {
               <input
                 type={showDk ? "text" : "password"}
                 value={aiApiKey}
-                onChange={(e) => setAiApiKey(e.target.value)}
+                onChange={(e) => { setAiApiKey(e.target.value); setValidationErr(null); }}
                 placeholder={aiProvider === "groq" ? "gsk_..." : "sk-bee-..."}
                 className="input pr-10 font-mono text-sm"
+                style={validationErr ? { borderColor: "rgba(239,68,68,0.6)" } : {}}
               />
               <button
                 type="button"
@@ -234,19 +272,32 @@ export default function SettingsForm({ config }: { config: AppConfig }) {
                 {showDk ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            {aiApiKey && (
-              <p className="text-xs mt-1.5" style={{ color: "#10b981" }}>
-                ● API Key đã cấu hình
+            {/* Validation error */}
+            {validationErr && (
+              <p className="text-xs mt-1.5 flex items-center gap-1" style={{ color: "#ef4444" }}>
+                <XCircle className="w-3 h-3" /> {validationErr}
               </p>
+            )}
+            {aiApiKey && !validationErr && (
+              <p className="text-xs mt-1.5" style={{ color: "#10b981" }}>● API Key đã cấu hình</p>
             )}
             {aiProvider === "groq" && !aiApiKey && (
               <p className="text-xs mt-1.5" style={{ color: "#f59e0b" }}>
                 Lấy API key miễn phí tại{" "}
-                <a href="https://console.groq.com" target="_blank" rel="noopener noreferrer" style={{ color: "#818cf8" }}>
-                  console.groq.com
-                </a>
+                <a href="https://console.groq.com" target="_blank" rel="noopener noreferrer" style={{ color: "#818cf8" }}>console.groq.com</a>
               </p>
             )}
+            {/* Test Connection button */}
+            <button
+              type="button"
+              onClick={testConnection}
+              disabled={testingConn || !aiApiKey.trim()}
+              className="btn btn-ghost text-xs py-1.5 px-3 mt-2 flex items-center gap-1.5"
+              style={{ opacity: !aiApiKey.trim() ? 0.4 : 1 }}
+            >
+              {testingConn ? <Loader2 className="w-3 h-3 spin" /> : <CheckCircle className="w-3 h-3" />}
+              {testingConn ? "Đang kiểm tra..." : "Test kết nối"}
+            </button>
           </div>
 
           {/* Model name */}

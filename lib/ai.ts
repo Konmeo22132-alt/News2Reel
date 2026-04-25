@@ -78,7 +78,7 @@ ${engine === "ffmpeg" ? `{
     {
       "narration": "Câu kể chuyện ĐẦY ĐỦ, 25-45 từ, có <keyword>từ quan trọng</keyword>.",
       "duration": 8,
-      "context_image_index": 0
+      "context_image_url": "URL ảnh từ danh sách ảnh đã cung cấp phù hợp nhất với cảnh này (hoặc null nếu không có ảnh phù hợp)"
     }
   ],
   "callToAction": "Theo dõi để cập nhật diễn biến mới nhất"
@@ -109,6 +109,37 @@ ${engine === "ffmpeg" ? `{
 TỔNG THỜI LƯỢNG: 50-90 giây. TUYỆT ĐỐI KHÔNG DÙNG BULLET POINTS.
 `.trim();
 
+/**
+ * Build OpenAI-compatible multimodal user message.
+ * Gửi tối đa MAX_IMAGES ảnh cùng bài viết để AI "nhìn" ngữ cảnh hình ảnh.
+ */
+const MAX_VISION_IMAGES = 5;
+
+function buildUserMessage(
+  article: ScrapedArticle,
+): Array<{ type: string; text?: string; image_url?: { url: string; detail: string } }> {
+  const textPart = {
+    type: "text",
+    text: [
+      `Bài viết:\nTiêu đề: ${article.title}`,
+      `\nNội dung:\n${article.content}`,
+      article.imageUrls?.length
+        ? `\n\nDanh sách URL ảnh của bài viết (chọn URL phù hợp nhất cho từng scene):\n${article.imageUrls.slice(0, MAX_VISION_IMAGES).map((u, i) => `[${i}] ${u}`).join("\n")}`
+        : "",
+    ].join(""),
+  };
+
+  // Chỉ gửi ảnh khi có và model hỗ trợ vision
+  const imageParts = (article.imageUrls ?? [])
+    .slice(0, MAX_VISION_IMAGES)
+    .map((url) => ({
+      type: "image_url",
+      image_url: { url, detail: "low" } as { url: string; detail: string },
+    }));
+
+  return [textPart, ...imageParts];
+}
+
 export async function generateScript(
   article: ScrapedArticle,
   config: {
@@ -118,6 +149,7 @@ export async function generateScript(
     aiProvider?: string;
     aiModel?: string | null;
     engine: "ffmpeg" | "remotion";
+    useVision?: boolean; // Bật vision nếu model hỗ trợ (default: true khi có ảnh)
   }
 ): Promise<VideoScript> {
   const { apiKey, channelGoal, customPrompt } = config;
@@ -128,21 +160,28 @@ export async function generateScript(
 
   console.log(`[AI] Provider: ${provider} | Model: ${model} | URL: ${apiUrl}`);
 
-  const body = JSON.stringify({
-    model,
-    messages: [
-      {
-        role: "system",
-        content: SYSTEM_PROMPT(channelGoal, customPrompt ?? "", config.engine),
-      },
-      {
-        role: "user",
-        content: `Bài viết:\nTiêu đề: ${article.title}\n\nNội dung:\n${article.content}`,
-      },
-    ],
-    temperature: 0.8,
-    max_tokens: 8000,
-  });
+  const hasImages = (article.imageUrls?.length ?? 0) > 0;
+  // visionEnabled: mutable — auto-disables if model returns 400 (unsupported vision)
+  let visionEnabled = config.useVision !== false && hasImages;
+
+  const buildBody = (withVision: boolean) => {
+    const userContent = withVision
+      ? buildUserMessage(article)
+      : `Bài viết:\nTiêu đề: ${article.title}\n\nNội dung:\n${article.content}`;
+    return JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT(channelGoal, customPrompt ?? "", config.engine) },
+        { role: "user",   content: userContent },
+      ],
+      temperature: 0.8,
+      max_tokens: 8000,
+    });
+  };
+
+  if (visionEnabled) {
+    console.log(`[AI] Vision mode ON — gửi ${Math.min((article.imageUrls?.length ?? 0), MAX_VISION_IMAGES)} ảnh cùng bài viết`);
+  }
 
   // Retry up to 3 times on 429 (rate limit)
   let lastError: Error = new Error("Unknown error");
@@ -161,7 +200,7 @@ export async function generateScript(
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
         },
-        body,
+        body: buildBody(visionEnabled),
         signal: AbortSignal.timeout(90_000),
       });
     } catch (fetchErr) {
@@ -173,6 +212,14 @@ export async function generateScript(
     if (response.status === 429) {
       lastError = new Error(`Rate limited (429). Thử lại sau ít phút.`);
       continue; // retry
+    }
+
+    // 400 khi vision mode — model không hỗ trợ multimodal → tự động tắt vision và retry
+    if (response.status === 400 && visionEnabled) {
+      const errBody = await response.text().catch(() => "");
+      console.warn(`[AI] Vision 400 error, fallback to text-only: ${errBody.slice(0, 200)}`);
+      visionEnabled = false;
+      continue;
     }
 
     if (!response.ok) {
@@ -199,20 +246,45 @@ export async function generateScript(
       // Handle cases where model returns partial JSON
       const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
       const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
-      
+
       // Normalize to VideoScript format
+      const allImages = article.imageUrls ?? [];
+      // Helper: validate URL phải thuộc article.imageUrls (chống AI hallucinate)
+      const validateImgUrl = (url: unknown): string | undefined => {
+        const s = String(url ?? "");
+        if (!s.startsWith("http")) return undefined;
+        // Accept if URL is in the scraped list, or if no list (fallback graceful)
+        if (allImages.length === 0) return s;
+        return allImages.includes(s) ? s : undefined;
+      };
+
       script = {
         clickbait_title: String(parsed.clickbait_title || parsed.title || article.title.slice(0, 60)),
         fake_username: String(parsed.fake_username || "The Investigator"),
+        context_image_url: validateImgUrl(parsed.context_image_url) ?? allImages[0] ?? undefined,
         hook: String(parsed.hook || parsed.title || ""),
-        scenes: (parsed.scenes || []).map((s: Record<string, unknown>) => ({
-          narration: String(s.narration || s.text || s.content || ""),
-          duration: Number(s.duration) || 6,
-          durationInFrames: s.durationInFrames ? Number(s.durationInFrames) : undefined,
-          animationType: s.animationType ? String(s.animationType) : undefined,
-          animationProps: s.animationProps && typeof s.animationProps === "object" ? s.animationProps : {},
-          context_image_index: s.context_image_index !== undefined ? Number(s.context_image_index) : undefined,
-        })),
+        scenes: (parsed.scenes || []).map((s: Record<string, unknown>, idx: number) => {
+          // Resolve context image: AI có thể trả về URL hoặc index
+          let resolvedImageUrl: string | undefined;
+          if (s.context_image_url && String(s.context_image_url).startsWith("http")) {
+            resolvedImageUrl = validateImgUrl(s.context_image_url);
+          } else if (s.context_image_index !== undefined) {
+            resolvedImageUrl = allImages[Number(s.context_image_index)] ?? allImages[idx % allImages.length];
+          } else if (allImages.length > 0) {
+            // Fallback: phân phối ảnh theo scene index
+            resolvedImageUrl = allImages[idx % allImages.length];
+          }
+
+          return {
+            narration: String(s.narration || s.text || s.content || ""),
+            duration: Number(s.duration) || 6,
+            durationInFrames: s.durationInFrames ? Number(s.durationInFrames) : undefined,
+            animationType: s.animationType ? String(s.animationType) : undefined,
+            animationProps: s.animationProps && typeof s.animationProps === "object" ? s.animationProps : {},
+            context_image_url: resolvedImageUrl,
+            context_image_index: s.context_image_index !== undefined ? Number(s.context_image_index) : idx,
+          };
+        }),
         callToAction: String(parsed.callToAction || parsed.cta || "Theo dõi kênh để nhận tin nóng nhất!"),
       };
     } catch {
@@ -224,7 +296,7 @@ export async function generateScript(
     if (!script.fake_username) script.fake_username = "The Investigator";
     if (!script.hook) script.hook = script.clickbait_title;
     if (!script.callToAction) script.callToAction = "Theo dõi kênh để không bỏ lỡ!";
-    
+
     if (!Array.isArray(script.scenes) || script.scenes.length === 0) {
       script.scenes = [{
         narration: article.content.slice(0, 200),
