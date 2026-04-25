@@ -194,7 +194,7 @@ async function analyzeImagesWithVisionAgent(opts: {
         max_tokens: 1200,
         temperature: 0.4,
       }),
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(180_000), // Increased to 180s for heavy vision processing
     });
 
     if (!res.ok) {
@@ -311,12 +311,19 @@ export async function generateScript(
       continue; // retry
     }
 
-    // 400 khi vision mode — model không hỗ trợ multimodal → tự động tắt vision và retry
-    if (response.status === 400 && visionEnabled) {
+    // Vision fallback: 400 (Bad Request) or 404 (Not Found) typically mean vision is not supported for this model/endpoint
+    if ((response.status === 400 || response.status === 404) && visionEnabled) {
       const errBody = await response.text().catch(() => "");
-      console.warn(`[AI] Vision 400 error, fallback to text-only: ${errBody.slice(0, 200)}`);
-      visionEnabled = false;
-      continue;
+      const isVisionError = errBody.toLowerCase().includes("image") || 
+                           errBody.toLowerCase().includes("multimodal") || 
+                           errBody.toLowerCase().includes("not found") ||
+                           response.status === 404;
+
+      if (isVisionError) {
+        console.warn(`[AI] Vision not supported by model/provider, falling back to text-only mode. Error: ${errBody.slice(0, 200)}`);
+        visionEnabled = false;
+        continue; // Retry without vision
+      }
     }
 
     if (!response.ok) {
