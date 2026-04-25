@@ -32,7 +32,14 @@ export const NewsPhoto: React.FC<Props> = ({ imageUrl }) => {
   // Content zone height in px
   const contentHeight = CONTENT_MAX_BOTTOM; // 1440
 
-  if (!imageUrl) {
+  // CRITICAL: Only use local static files — never external URLs.
+  // External URLs cause Remotion's internal delayRender() to timeout (28s).
+  // All images MUST be pre-downloaded to public/remotion-assets/ before render.
+  const isLocalPath = imageUrl && !imageUrl.startsWith("http");
+  const imgSrc = isLocalPath ? staticFile(imageUrl!) : null;
+
+  if (!imgSrc) {
+    // No image or external URL — render animated gradient placeholder
     return (
       <div
         style={{
@@ -41,11 +48,10 @@ export const NewsPhoto: React.FC<Props> = ({ imageUrl }) => {
           left: 0,
           width: FRAME_WIDTH,
           height: contentHeight,
-          background: "linear-gradient(160deg, #0a0f18 0%, #020408 100%)",
+          background: `linear-gradient(160deg, #0a0f18 0%, #020408 100%)`,
           overflow: "hidden",
         }}
       >
-        {/* Subtle grid pattern */}
         <div
           style={{
             width: "100%",
@@ -59,8 +65,6 @@ export const NewsPhoto: React.FC<Props> = ({ imageUrl }) => {
       </div>
     );
   }
-
-  const imgSrc = imageUrl.startsWith("http") ? imageUrl : staticFile(imageUrl);
 
   return (
     <div

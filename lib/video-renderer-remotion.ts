@@ -118,7 +118,7 @@ export async function renderRemotionVideo(
     // 4. Execute Remotion
     onProgress(35, `Đang khởi động Remotion Engine (${absoluteTotalFrames} frames)...`);
 
-    const remotionCmd = `npx remotion render remotion/index.ts AutoVideoComposition "${outFile}" --props="${propsFile}" --frames=0-${absoluteTotalFrames - 1} --log=info`;
+    const remotionCmd = `npx remotion render remotion/index.ts AutoVideoComposition "${outFile}" --props="${propsFile}" --frames=0-${absoluteTotalFrames - 1} --log=info --timeout=120000 --concurrency=1`;
 
     const child = exec(remotionCmd);
 

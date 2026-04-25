@@ -33,25 +33,51 @@ export interface TTSOptions {
  * @param outputPath - Path to save MP3 file
  * @param options - Voice options (voice, rate, pitch)
  */
+// Retry order: primary voice → female fallback → third voice → Google TTS
+const VOICE_FALLBACK_ORDER = [
+  "vi-VN-NamMinhNeural",
+  "vi-VN-HoaiMyNeural",
+  "vi-VN-AnNeural",
+];
+
 export async function textToSpeech(
   text: string,
   outputPath: string,
   options: TTSOptions = {}
 ): Promise<void> {
-  const voice = options.voice || DEFAULT_VOICE;
-  const rate = options.rate || DEFAULT_RATE;
+  const requestedVoice = options.voice || DEFAULT_VOICE;
+  const rate  = options.rate  || DEFAULT_RATE;
   const pitch = options.pitch || DEFAULT_PITCH;
 
-  // Try edge-tts first (higher quality)
-  try {
-    await synthesizeWithEdgeTTS(text, outputPath, voice, rate, pitch);
-    console.log(`[TTS] Generated with Edge TTS: ${voice} @ ${rate}`);
-    return;
-  } catch (edgeError) {
-    console.warn(`[TTS] Edge TTS failed, trying Google TTS: ${edgeError}`);
+  // Build retry list: requested voice first, then the others
+  const voiceOrder = [
+    requestedVoice,
+    ...VOICE_FALLBACK_ORDER.filter((v) => v !== requestedVoice),
+  ];
+
+  let lastEdgeError: unknown;
+  for (let attempt = 0; attempt < voiceOrder.length; attempt++) {
+    const voice = voiceOrder[attempt];
+    try {
+      await synthesizeWithEdgeTTS(text, outputPath, voice, rate, pitch);
+      if (attempt > 0) {
+        console.log(`[TTS] Recovered with fallback voice: ${voice}`);
+      } else {
+        console.log(`[TTS] Generated with Edge TTS: ${voice} @ ${rate}`);
+      }
+      return;
+    } catch (edgeError) {
+      lastEdgeError = edgeError;
+      console.warn(`[TTS] Voice ${voice} failed (attempt ${attempt + 1}/${voiceOrder.length}): ${edgeError}`);
+      // Short back-off before retry
+      if (attempt < voiceOrder.length - 1) {
+        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+      }
+    }
   }
 
-  // Fallback to Google Translate TTS
+  // All edge-tts voices failed — fall back to Google TTS
+  console.warn(`[TTS] All Edge TTS voices failed, using Google TTS fallback. Last error: ${lastEdgeError}`);
   await synthesizeWithGoogleTTS(text, outputPath);
 }
 
@@ -65,27 +91,35 @@ async function synthesizeWithEdgeTTS(
   rate: string,
   pitch: string
 ): Promise<void> {
-  // Escape quotes in text for shell command
-  const escapedText = text.replace(/"/g, '\\"');
-  
-  const cmd = `edge-tts --voice "${voice}" --rate="${rate}" --pitch="${pitch}" --text="${escapedText}" --write-media="${outputPath}"`;
-  
+  // Write text to temp file to avoid shell escaping issues with special chars
+  const tmpTextFile = outputPath + ".txt";
+  fs.writeFileSync(tmpTextFile, text, "utf-8");
+
+  // Use --write-media with a temp output then rename to avoid partial files
+  const tmpOut = outputPath + ".tmp.mp3";
+  const cmd = `edge-tts --voice "${voice}" --rate="${rate}" --pitch="${pitch}" --file="${tmpTextFile}" --write-media="${tmpOut}"`;
+
   try {
-    execSync(cmd, { encoding: "utf-8", timeout: 30000 });
-    if (!fs.existsSync(outputPath)) {
-      throw new Error("Edge TTS did not create output file");
+    execSync(cmd, { encoding: "utf-8", timeout: 60_000 }); // 60s timeout
+    if (!fs.existsSync(tmpOut) || fs.statSync(tmpOut).size < 1000) {
+      throw new Error("Edge TTS output is missing or too small (< 1KB)");
     }
+    // Atomic rename
+    fs.renameSync(tmpOut, outputPath);
   } catch (error) {
-    // Check if edge-tts is installed
+    // Cleanup temp files
+    try { fs.unlinkSync(tmpTextFile); } catch {}
+    try { if (fs.existsSync(tmpOut)) fs.unlinkSync(tmpOut); } catch {}
+    // Check if edge-tts is installed at all
     try {
       execSync("edge-tts --version", { encoding: "utf-8", timeout: 5000 });
     } catch {
-      throw new Error(
-        "edge-tts not installed. Install with: pip install edge-tts"
-      );
+      throw new Error("edge-tts not installed. Install with: pip install edge-tts");
     }
     throw error;
   }
+  // Cleanup temp text file on success
+  try { fs.unlinkSync(tmpTextFile); } catch {}
 }
 
 /**
