@@ -3,7 +3,6 @@ node_modules/
 .pnp
 .pnp.js
 .gitignore
-.gitignore
 # ─── Next.js ──────────────────────────────────────────────────────────────────
 .next/
 out/
@@ -71,5 +70,10 @@ coverage/
 public/assets/bgm/
 public/assets/visuals/
 public/assets/broll/
-AGENTS.md
-TODO.md
+
+# ─── Personal & Test Files ────────────────────────────────────────────────────
+test_sub_manual*
+test_*.ass
+test_*.mp4
+test-scene*
+scratch/
