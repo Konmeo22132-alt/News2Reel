@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, Sequence, Audio, staticFile, useCurrentFrame, interpolate, continueRender, delayRender } from "remotion";
+import { AbsoluteFill, Sequence, Audio, staticFile, useCurrentFrame, interpolate } from "remotion";
 import { ScriptTemplate } from "../Root";
 import { ZONES, FRAME_WIDTH, FRAME_HEIGHT, FONT_SIZES, ANIM } from "../constants/layout";
 
@@ -21,44 +21,14 @@ import { SplitScreenVS } from "./SplitScreenVS";
 import { DataChart } from "./DataChart";
 import { WarningAlert } from "./WarningAlert";
 
-// ─── Font Loading (Remotion-safe) ────────────────────────────────────────────
-// IMPORTANT: Do NOT use <link> tags for fonts in Remotion components.
-// Remotion cannot track external resource loading from <link> → delayRender hangs.
-// Use FontFace API with delayRender/continueRender instead.
+// ─── Font: Use system fonts — safe for headless VPS render ───────────────────
+// LESSON LEARNED: Never load fonts from external URLs in Remotion on VPS.
+//   - <link> tags: Remotion cannot track → delayRender hangs
+//   - FontFace API: URL may 404, font.load() may not reject promptly → also hangs
+// System fonts (Arial/sans-serif) are always available on Ubuntu VPS.
+// If Outfit is needed: download .woff2 to public/fonts/ and use staticFile().
 
-const FONT_FAMILY = "Outfit, 'Noto Sans', Arial, sans-serif";
-
-// Pre-load font once at module level (outside component to avoid re-loading)
-let fontHandle: ReturnType<typeof delayRender> | null = null;
-let fontLoaded = false;
-
-function loadOutfitFont(): ReturnType<typeof delayRender> | null {
-  if (typeof document === "undefined" || fontLoaded) return null;
-  const handle = delayRender("Loading Outfit font");
-  const font = new FontFace(
-    "Outfit",
-    "url(https://fonts.gstatic.com/s/outfit/v11/QGYyz_MVcBeNP4NjuGObqx1XmO1I4TC1C4G-EiAou6Y.woff2) format('woff2')",
-    { weight: "400 900", style: "normal", display: "swap" }
-  );
-  font.load()
-    .then((loaded) => {
-      document.fonts.add(loaded);
-      fontLoaded = true;
-      continueRender(handle);
-    })
-    .catch(() => {
-      // Font failed — continue render with fallback font, don't block
-      fontLoaded = true;
-      continueRender(handle);
-    });
-  fontHandle = handle;
-  return handle;
-}
-
-// Trigger font load
-if (typeof document !== "undefined" && !fontLoaded) {
-  loadOutfitFont();
-}
+const FONT_FAMILY = "Arial, 'Helvetica Neue', sans-serif";
 
 
 // ─── Watermark ───────────────────────────────────────────────────────────────
