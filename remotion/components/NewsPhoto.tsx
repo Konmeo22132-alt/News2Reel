@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, Img, interpolate, useCurrentFrame, useVideoConfig, staticFile, Easing } from "remotion";
+import { AbsoluteFill, Img, interpolate, useCurrentFrame, useVideoConfig, staticFile } from "remotion";
 import { CONTENT_MAX_BOTTOM, FRAME_WIDTH } from "../constants/layout";
 
 interface Props {
@@ -7,59 +7,41 @@ interface Props {
 }
 
 /**
- * NewsPhoto v2 — Cinematic image with Ken Burns + zoom entrance.
+ * NewsPhoto v3 — VPS-safe cinematic image.
  *
- * Improvements:
- *   ✨ Zoom-in entrance (1.15→1.0) for drama on scene start
- *   ✨ Stronger Ken Burns (1.0→1.12 + larger pan range)
- *   ✨ Parallax-feel with separate background/foreground motion
- *   ✨ Color grade overlay (teal shadows, warm highlights)
- *   ✨ Stronger vignette
+ * LESSONS LEARNED (from crashes):
+ *   ❌ blur(40px) CSS filter → hangs headless Chromium on VPS
+ *   ❌ Two <Img> tags → double delayRender, double memory
+ *   ❌ Easing import → can crash if version mismatch
  *
- * Layout rules:
- *   - Image is CLIPPED at CONTENT_MAX_BOTTOM (1440px) — never enters SubtitleZone
- *   - Blurred background fill to eliminate black bars for non-9:16 images
+ * v3 keeps visual quality but removes ALL CSS filters:
+ *   ✅ Single <Img> with Ken Burns (zoom + drift)
+ *   ✅ Dark gradient background instead of blurred image
+ *   ✅ Color grade via gradient overlay (no filter)
+ *   ✅ Strong vignette via box-shadow (no filter)
  */
 export const NewsPhoto: React.FC<Props> = ({ imageUrl }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
 
-  // Zoom-in entrance: 1.15 → 1.0 in first 15 frames
-  const entranceZoom = interpolate(frame, [0, 15], [1.15, 1.0], {
-    extrapolateRight: "clamp",
-    easing: Easing.out(Easing.cubic),
-  });
-
-  // Ken Burns: slow zoom 1.0→1.12 over full duration
-  const kenBurnsZoom = interpolate(frame, [0, durationInFrames], [1.0, 1.12], {
+  // Ken Burns: slow zoom over full duration
+  const kenBurnsZoom = interpolate(frame, [0, durationInFrames], [1.0, 1.08], {
     extrapolateRight: "clamp",
   });
 
-  // Combined zoom: entrance * ken burns
-  const totalZoom = entranceZoom * kenBurnsZoom;
-
-  // Horizontal drift (parallax feel)
-  const translateX = interpolate(frame, [0, durationInFrames], [-20, 20], {
+  // Horizontal drift
+  const translateX = interpolate(frame, [0, durationInFrames], [-10, 10], {
     extrapolateRight: "clamp",
   });
 
-  // Vertical drift (subtle)
-  const translateY = interpolate(frame, [0, durationInFrames], [5, -5], {
-    extrapolateRight: "clamp",
-  });
+  const contentHeight = CONTENT_MAX_BOTTOM;
 
-  // Background layer moves slower (parallax)
-  const bgTranslateX = translateX * 0.3;
-  const bgTranslateY = translateY * 0.3;
-
-  const contentHeight = CONTENT_MAX_BOTTOM; // 1440
-
-  // CRITICAL: Only use local static files — never external URLs.
+  // Only local static files — never external URLs
   const isLocalPath = imageUrl && !imageUrl.startsWith("http");
   const imgSrc = isLocalPath ? staticFile(imageUrl!) : null;
 
   if (!imgSrc) {
-    // No image or external URL — render animated gradient placeholder
+    // No image — render dark gradient placeholder
     return (
       <div
         style={{
@@ -68,7 +50,7 @@ export const NewsPhoto: React.FC<Props> = ({ imageUrl }) => {
           left: 0,
           width: FRAME_WIDTH,
           height: contentHeight,
-          background: `linear-gradient(160deg, #0a0f18 0%, #020408 100%)`,
+          background: "linear-gradient(160deg, #0a0f18 0%, #020408 100%)",
           overflow: "hidden",
         }}
       >
@@ -77,11 +59,11 @@ export const NewsPhoto: React.FC<Props> = ({ imageUrl }) => {
           style={{
             width: "100%",
             height: "100%",
-            opacity: 0.08,
+            opacity: 0.06,
             backgroundImage:
-              "linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)",
+              "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)",
             backgroundSize: "40px 40px",
-            transform: `translateY(${frame * 0.5}px)`,
+            transform: `translateY(${frame * 0.3}px)`,
           }}
         />
       </div>
@@ -97,25 +79,10 @@ export const NewsPhoto: React.FC<Props> = ({ imageUrl }) => {
         width: FRAME_WIDTH,
         height: contentHeight,
         overflow: "hidden",
-        background: "#000",
+        background: "#030308",
       }}
     >
-      {/* Background blur fill — eliminates black bars (parallax slower) */}
-      <Img
-        src={imgSrc}
-        style={{
-          position: "absolute",
-          width: "120%",
-          height: "120%",
-          top: "-10%",
-          left: "-10%",
-          objectFit: "cover",
-          filter: "blur(40px) brightness(30%) saturate(1.3)",
-          transform: `translate(${bgTranslateX}px, ${bgTranslateY}px) scale(1.15)`,
-        }}
-      />
-
-      {/* Foreground image with Ken Burns + entrance zoom */}
+      {/* SINGLE image — Ken Burns zoom + drift. NO blur, NO double Img. */}
       <Img
         src={imgSrc}
         style={{
@@ -123,31 +90,31 @@ export const NewsPhoto: React.FC<Props> = ({ imageUrl }) => {
           width: "100%",
           height: "100%",
           objectFit: "cover",
-          transform: `scale(${totalZoom}) translate(${translateX}px, ${translateY}px)`,
+          transform: `scale(${kenBurnsZoom}) translateX(${translateX}px)`,
           transformOrigin: "center center",
         }}
       />
 
-      {/* Color grade overlay — teal shadows, warm highlights */}
+      {/* Color grade overlay — teal/warm via gradient (NO CSS filter) */}
       <div
         style={{
           position: "absolute",
           inset: 0,
-          background: "linear-gradient(180deg, rgba(0,50,80,0.12) 0%, rgba(30,10,0,0.08) 100%)",
+          background: "linear-gradient(180deg, rgba(0,40,60,0.1) 0%, rgba(20,8,0,0.06) 100%)",
           mixBlendMode: "overlay",
         }}
       />
 
-      {/* Vignette overlay — stronger than v1 */}
+      {/* Vignette — box-shadow only (NO filter) */}
       <div
         style={{
           position: "absolute",
           inset: 0,
-          boxShadow: "inset 0 0 220px rgba(0,0,0,0.8)",
+          boxShadow: "inset 0 0 180px rgba(0,0,0,0.7)",
         }}
       />
 
-      {/* Top darkening gradient — ensures banner text readability */}
+      {/* Top darkening gradient — text readability */}
       <div
         style={{
           position: "absolute",
@@ -155,19 +122,19 @@ export const NewsPhoto: React.FC<Props> = ({ imageUrl }) => {
           left: 0,
           right: 0,
           height: "25%",
-          background: "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 100%)",
+          background: "linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, transparent 100%)",
         }}
       />
 
-      {/* Bottom gradient mask — blends into subtitle zone */}
+      {/* Bottom gradient — blends into subtitle zone */}
       <div
         style={{
           position: "absolute",
           bottom: 0,
           left: 0,
           right: 0,
-          height: "40%",
-          background: "linear-gradient(to bottom, transparent 0%, rgba(5,5,16,0.6) 50%, rgba(5,5,16,0.95) 100%)",
+          height: "35%",
+          background: "linear-gradient(to bottom, transparent 0%, rgba(5,5,16,0.5) 50%, rgba(5,5,16,0.95) 100%)",
         }}
       />
     </div>

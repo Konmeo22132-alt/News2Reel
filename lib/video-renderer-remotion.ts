@@ -167,7 +167,6 @@ export async function renderRemotionVideo(
       `--log=verbose`,
       `--timeout=120000`,
       `--concurrency=1`,
-      `--gl=swangle`,                // Software WebGL — no hardware GPU needed
       `--chromium-args="${chromiumArgs}"`,
     ].join(" ");
 

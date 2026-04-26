@@ -1,5 +1,5 @@
 import React from "react";
-import { useCurrentFrame, useVideoConfig, interpolate, spring, Easing } from "remotion";
+import { useCurrentFrame, useVideoConfig, interpolate, spring } from "remotion";
 import { ZONES, FRAME_WIDTH, FONT_SIZES } from "../constants/layout";
 
 interface Props {
