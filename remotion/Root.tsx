@@ -16,10 +16,12 @@ export type ScriptScene = {
 export type ScriptTemplate = {
   clickbait_title: string;
   fake_username: string;
+  hook?: string;
   context_image_url?: string;
   downloadedImages?: string[];
   scenes: ScriptScene[];
 };
+
 
 export const RemotionRoot: React.FC = () => {
   return (

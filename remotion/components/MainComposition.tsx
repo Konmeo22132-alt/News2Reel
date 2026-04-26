@@ -7,6 +7,10 @@ import { ZONES, FRAME_WIDTH, FRAME_HEIGHT, FONT_SIZES, ANIM } from "../constants
 import { NewsPhoto } from "./NewsPhoto";
 import { KaraokeSubtitle } from "./KaraokeSubtitle";
 
+// ✨ NEW: Cinematic hook + transitions
+import { HookScene } from "./HookScene";
+import { SceneEntrance, SceneExit, getTransitionType } from "./SceneTransition";
+
 // Animation overlays (render inside ContentZone only)
 import { SocialTweet } from "./SocialTweet";
 import { Earth3D } from "./Earth3D";
@@ -16,86 +20,6 @@ import { PointToPoint } from "./PointToPoint";
 import { SplitScreenVS } from "./SplitScreenVS";
 import { DataChart } from "./DataChart";
 import { WarningAlert } from "./WarningAlert";
-
-// ─── Breaking News Top Banner ────────────────────────────────────────────────
-
-const TopBanner: React.FC<{ title: string; isHook?: boolean }> = ({ title, isHook }) => {
-  const frame = useCurrentFrame();
-  const slideY = interpolate(frame, [0, 12], [-80, 0], {
-    extrapolateRight: "clamp",
-    easing: ANIM.easing,
-  });
-  const opacity = interpolate(frame, [0, 8], [0, 1], { extrapolateRight: "clamp" });
-
-  if (!isHook) return null;
-
-  return (
-    <div
-      style={{
-        position: "absolute",
-        top: ZONES.top.y + 24,
-        left: 32,
-        right: 32,
-        transform: `translateY(${slideY}px)`,
-        opacity,
-        zIndex: 50,
-      }}
-    >
-      {/* BREAKING NEWS label */}
-      <div
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 12,
-          background: "#E53935",
-          borderRadius: 6,
-          paddingLeft: 16,
-          paddingRight: 20,
-          paddingTop: 8,
-          paddingBottom: 8,
-          marginBottom: 14,
-        }}
-      >
-        <div
-          style={{
-            width: 10,
-            height: 10,
-            borderRadius: "50%",
-            background: "#fff",
-            animation: "pulse 1s infinite",
-          }}
-        />
-        <span
-          style={{
-            fontFamily: "'Outfit', sans-serif",
-            fontWeight: 800,
-            fontSize: FONT_SIZES.label,
-            color: "#fff",
-            letterSpacing: 2,
-            textTransform: "uppercase",
-          }}
-        >
-          Breaking News
-        </span>
-      </div>
-
-      {/* Title */}
-      <div
-        style={{
-          fontFamily: "'Outfit', sans-serif",
-          fontWeight: 900,
-          fontSize: FONT_SIZES.title - 4,
-          color: "#fff",
-          lineHeight: 1.25,
-          textShadow: "3px 3px 0 #000, -3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000",
-          maxWidth: FRAME_WIDTH - 64,
-        }}
-      >
-        {title}
-      </div>
-    </div>
-  );
-};
 
 // ─── Watermark ───────────────────────────────────────────────────────────────
 
@@ -134,6 +58,45 @@ const Watermark: React.FC<{ username: string }> = ({ username }) => (
   </div>
 );
 
+// ─── Film Grain Overlay ──────────────────────────────────────────────────────
+// Subtle animated noise that makes everything feel "cinematic"
+
+const FilmGrain: React.FC = () => {
+  const frame = useCurrentFrame();
+  // Shift grain pattern every frame for animation
+  const offsetX = (frame * 37) % 200;
+  const offsetY = (frame * 53) % 200;
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 90,
+        pointerEvents: "none",
+        opacity: 0.06,
+        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+        backgroundPosition: `${offsetX}px ${offsetY}px`,
+        mixBlendMode: "overlay",
+      }}
+    />
+  );
+};
+
+// ─── Cinematic Vignette (persistent) ─────────────────────────────────────────
+
+const CinematicVignette: React.FC = () => (
+  <div
+    style={{
+      position: "absolute",
+      inset: 0,
+      zIndex: 85,
+      pointerEvents: "none",
+      boxShadow: "inset 0 0 250px rgba(0,0,0,0.65)",
+    }}
+  />
+);
+
 // ─── Main Composition — The Director ─────────────────────────────────────────
 
 /**
@@ -152,10 +115,11 @@ const Watermark: React.FC<{ username: string }> = ({ username }) => (
  *   │  (480px)            │
  *   └─────────────────────┘ 1920px
  *
- * Rules enforced here:
- *   1. Animation overlays are wrapped in ContentZone clip
- *   2. KaraokeSubtitle is always rendered last (highest z-index)
- *   3. No component may render below y=1440 except KaraokeSubtitle
+ * v0.2.0 Enhancements:
+ *   ✨ HookScene for first scene (flash + zoom burst + camera shake + title slam)
+ *   ✨ SceneTransition between scenes (zoom/glitch/whip/fade cycling)
+ *   ✨ Film grain overlay for cinematic feel
+ *   ✨ Persistent cinematic vignette
  */
 export const MainComposition: React.FC<{ script: ScriptTemplate }> = ({ script }) => {
   let frameCursor = 0;
@@ -174,58 +138,77 @@ export const MainComposition: React.FC<{ script: ScriptTemplate }> = ({ script }
         rel="stylesheet"
       />
 
-      {/* ── Persistent Watermark (always visible top-right) ── */}
+      {/* ── Persistent Layers (always visible) ── */}
       <Watermark username={script.fake_username || "TheInvestigator"} />
+      <CinematicVignette />
+      <FilmGrain />
 
       {/* ── Scenes ── */}
       {script.scenes.map((scene, index) => {
         const startFrame = frameCursor;
         const duration = scene.durationInFrames || 150;
         frameCursor += duration;
+        const isFirstScene = index === 0;
+        const isLastScene = index === script.scenes.length - 1;
+        const transitionType = getTransitionType(index);
 
         return (
           <Sequence key={index} from={startFrame} durationInFrames={duration}>
             {/* ── Layer 1: Full-screen image (clipped at content zone bottom) ── */}
             <NewsPhoto imageUrl={scene.imageUrl} />
 
-            {/* ── Layer 2: Top Banner (only on hook scene) ── */}
-            <TopBanner title={script.clickbait_title} isHook={scene.isHook} />
-
-            {/* ── Layer 3: Animation overlays — ContentZone only ── */}
-            <div
-              style={{
-                position: "absolute",
-                top: ZONES.content.y,
-                left: 0,
-                width: FRAME_WIDTH,
-                height: ZONES.content.height,
-                overflow: "hidden", // Hard clip — nothing escapes ContentZone
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              {scene.animationType === "SocialTweet" && (
-                <SocialTweet
-                  metadata={{
-                    clickbait_title: script.clickbait_title,
-                    fake_username: script.fake_username,
-                    context_image_url:
-                      script.downloadedImages?.length
-                        ? script.downloadedImages[0]
-                        : scene.imageUrl || script.context_image_url || "",
+            {/* ── Layer 2: Hook Scene OR Animation Overlay ── */}
+            {isFirstScene && scene.isHook ? (
+              // ✨ NEW: Cinematic hook for first scene
+              <HookScene
+                title={script.clickbait_title}
+                hook={script.hook}
+              />
+            ) : (
+              <>
+                {/* ── Animation overlays — ContentZone only ── */}
+                <div
+                  style={{
+                    position: "absolute",
+                    top: ZONES.content.y,
+                    left: 0,
+                    width: FRAME_WIDTH,
+                    height: ZONES.content.height,
+                    overflow: "hidden", // Hard clip — nothing escapes ContentZone
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                   }}
-                  {...scene.animationProps}
-                />
-              )}
-              {scene.animationType === "Earth3D" && <Earth3D {...scene.animationProps} />}
-              {scene.animationType === "HackerTerminal" && <HackerTerminal {...scene.animationProps} />}
-              {scene.animationType === "ImpactCallout" && <ImpactCallout {...scene.animationProps} />}
-              {scene.animationType === "PointToPoint" && <PointToPoint {...scene.animationProps} />}
-              {scene.animationType === "SplitScreenVS" && <SplitScreenVS {...scene.animationProps} />}
-              {scene.animationType === "DataChart" && <DataChart {...scene.animationProps} />}
-              {scene.animationType === "WarningAlert" && <WarningAlert {...scene.animationProps} />}
-            </div>
+                >
+                  {scene.animationType === "SocialTweet" && (
+                    <SocialTweet
+                      metadata={{
+                        clickbait_title: script.clickbait_title,
+                        fake_username: script.fake_username,
+                        context_image_url:
+                          script.downloadedImages?.length
+                            ? script.downloadedImages[0]
+                            : scene.imageUrl || script.context_image_url || "",
+                      }}
+                      {...scene.animationProps}
+                    />
+                  )}
+                  {scene.animationType === "Earth3D" && <Earth3D {...scene.animationProps} />}
+                  {scene.animationType === "HackerTerminal" && <HackerTerminal {...scene.animationProps} />}
+                  {scene.animationType === "ImpactCallout" && <ImpactCallout {...scene.animationProps} />}
+                  {scene.animationType === "PointToPoint" && <PointToPoint {...scene.animationProps} />}
+                  {scene.animationType === "SplitScreenVS" && <SplitScreenVS {...scene.animationProps} />}
+                  {scene.animationType === "DataChart" && <DataChart {...scene.animationProps} />}
+                  {scene.animationType === "WarningAlert" && <WarningAlert {...scene.animationProps} />}
+                </div>
+              </>
+            )}
+
+            {/* ── Layer 3: Scene Transitions ── */}
+            {/* Entrance: fade-from-black (skip for first scene — HookScene handles its own) */}
+            {!isFirstScene && <SceneEntrance type="fade" />}
+            {/* Exit: cinematic transition (skip for last scene) */}
+            {!isLastScene && <SceneExit type={transitionType} />}
 
             {/* ── Layer 4: TTS Audio ── */}
             {scene.audioUrl && <Audio src={staticFile(scene.audioUrl)} />}

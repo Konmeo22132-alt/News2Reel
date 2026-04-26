@@ -1,25 +1,24 @@
 import React from "react";
-import { useCurrentFrame, useVideoConfig, interpolate } from "remotion";
-import { ZONES, FRAME_WIDTH, FRAME_HEIGHT, FONT_SIZES } from "../constants/layout";
+import { useCurrentFrame, useVideoConfig, interpolate, spring, Easing } from "remotion";
+import { ZONES, FRAME_WIDTH, FONT_SIZES } from "../constants/layout";
 
 interface Props {
   narration: string;
 }
 
 /**
- * KaraokeSubtitle — 4-word group karaoke, Google Podcast style.
+ * KaraokeSubtitle v2 — Dynamic karaoke with keyword punch.
  *
- * Rules:
- *   ✅ Position: ABSOLUTE bottom of SubtitleZone (never moves, never overlaps content)
- *   ✅ Groups of 4 words always visible
- *   ✅ Active word: white/yellow (keyword), bold, slightly larger
- *   ✅ Past words: slightly dimmed gray
- *   ✅ Future words: dark gray
- *   ✅ Semi-transparent background bar for legibility on any image
+ * Improvements over v1:
+ *   ✨ Active word has BOUNCE entrance (spring animation)
+ *   ✨ Keywords SCALE UP 150% + intense glow when spoken
+ *   ✨ Group transitions have slide animation (not just opacity)
+ *   ✨ Active word indicator bar (underline that travels)
+ *   ✨ Better contrast with frosted glass background
  */
 export const KaraokeSubtitle: React.FC<Props> = ({ narration }) => {
   const frame = useCurrentFrame();
-  const { durationInFrames } = useVideoConfig();
+  const { durationInFrames, fps } = useVideoConfig();
 
   // ── Parse narration into words with keyword flag ──────────────────────────
   const parsedWords: { text: string; isKeyword: boolean }[] = [];
@@ -52,12 +51,22 @@ export const KaraokeSubtitle: React.FC<Props> = ({ narration }) => {
   const activeGroupStart = Math.floor(activeWordIdx / WORDS_PER_GROUP) * WORDS_PER_GROUP;
   const group = parsedWords.slice(activeGroupStart, activeGroupStart + WORDS_PER_GROUP);
 
-  // Fade in the very first group, fade out last group
-  const isFirstGroup = activeGroupStart === 0;
-  const isLastGroup  = activeGroupStart + WORDS_PER_GROUP >= parsedWords.length;
+  // ── Group transition animation ────────────────────────────────────────────
   const groupStartFrame = activeGroupStart * framesPerWord;
-  const groupEndFrame   = (activeGroupStart + WORDS_PER_GROUP) * framesPerWord;
+  const groupEndFrame = (activeGroupStart + WORDS_PER_GROUP) * framesPerWord;
+  const isFirstGroup = activeGroupStart === 0;
+  const isLastGroup = activeGroupStart + WORDS_PER_GROUP >= parsedWords.length;
 
+  // Slide + fade entrance
+  const entranceProgress = interpolate(
+    frame,
+    [groupStartFrame, groupStartFrame + 8],
+    [0, 1],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+  );
+  const slideY = interpolate(entranceProgress, [0, 1], [25, 0], {
+    easing: Easing.out(Easing.cubic),
+  });
   const opacity = interpolate(
     frame,
     isFirstGroup
@@ -75,21 +84,22 @@ export const KaraokeSubtitle: React.FC<Props> = ({ narration }) => {
         position: "absolute",
         left: 0,
         right: 0,
-        // Anchor to SubtitleZone: top of subtitle zone + padding
-        top: ZONES.subtitle.y + 20,
-        height: ZONES.subtitle.height - 20,
+        // Anchor to SubtitleZone
+        top: ZONES.subtitle.y,
+        height: ZONES.subtitle.height,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "flex-start",
-        paddingTop: 24,
-        paddingLeft: 48,
-        paddingRight: 48,
+        paddingTop: 28,
+        paddingLeft: 40,
+        paddingRight: 40,
         opacity,
-        zIndex: 100, // Always on top
+        transform: `translateY(${slideY}px)`,
+        zIndex: 100,
       }}
     >
-      {/* Semi-transparent background bar */}
+      {/* Frosted glass background */}
       <div
         style={{
           position: "absolute",
@@ -97,8 +107,8 @@ export const KaraokeSubtitle: React.FC<Props> = ({ narration }) => {
           left: 0,
           right: 0,
           bottom: 0,
-          background: "linear-gradient(to bottom, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.88) 100%)",
-          borderTop: "1px solid rgba(255,255,255,0.06)",
+          background: "linear-gradient(to bottom, rgba(5,5,16,0.82) 0%, rgba(5,5,16,0.95) 100%)",
+          borderTop: "2px solid rgba(255,255,255,0.08)",
         }}
       />
 
@@ -110,44 +120,65 @@ export const KaraokeSubtitle: React.FC<Props> = ({ narration }) => {
           flexWrap: "wrap",
           justifyContent: "center",
           alignItems: "center",
-          gap: "0 20px",
-          maxWidth: FRAME_WIDTH - 96,
+          gap: "4px 18px",
+          maxWidth: FRAME_WIDTH - 80,
           textAlign: "center",
           fontFamily: "'Outfit', sans-serif",
           fontWeight: 900,
-          lineHeight: 1.2,
+          lineHeight: 1.25,
           zIndex: 1,
         }}
       >
         {group.map((word, localIdx) => {
           const globalIdx = activeGroupStart + localIdx;
-          const isActive  = globalIdx === activeWordIdx;
-          const isPast    = globalIdx < activeWordIdx;
-          // isFuture = !isActive && !isPast
+          const isActive = globalIdx === activeWordIdx;
+          const isPast = globalIdx < activeWordIdx;
+          
+          // Frame when this specific word becomes active
+          const wordActivateFrame = globalIdx * framesPerWord;
+          const wordLocalFrame = frame - wordActivateFrame;
+
+          // Bounce entrance for active word
+          const wordScale = isActive
+            ? spring({
+                frame: Math.max(0, wordLocalFrame),
+                fps,
+                config: { damping: 10, mass: 0.8, stiffness: 300 },
+              })
+            : 1;
 
           let color: string;
           let fontSize: number;
           let textShadow: string;
+          let transform: string;
+          let extraGlow = "";
 
           if (isActive) {
             if (word.isKeyword) {
-              color      = "#FFD700"; // Gold for keywords being spoken
-              fontSize   = FONT_SIZES.subtitle + 10;
-              textShadow = "0 0 20px rgba(255,215,0,0.7), 4px 4px 0 #000, -4px -4px 0 #000, 4px -4px 0 #000, -4px 4px 0 #000";
+              // 🔥 KEYWORD PUNCH — scale up + intense glow
+              color = "#FFD700";
+              fontSize = FONT_SIZES.subtitle + 14;
+              textShadow = "0 0 30px rgba(255,215,0,0.9), 0 0 60px rgba(255,215,0,0.4), 4px 4px 0 #000, -4px -4px 0 #000, 4px -4px 0 #000, -4px 4px 0 #000";
+              transform = `scale(${0.6 + wordScale * 0.6})`;
+              extraGlow = "drop-shadow(0 0 20px rgba(255,215,0,0.5))";
             } else {
-              color      = "#FFFFFF";
-              fontSize   = FONT_SIZES.subtitle + 6;
-              textShadow = "4px 4px 0 #000, -4px -4px 0 #000, 4px -4px 0 #000, -4px 4px 0 #000, 0 8px 20px rgba(0,0,0,0.9)";
+              color = "#FFFFFF";
+              fontSize = FONT_SIZES.subtitle + 8;
+              textShadow = "4px 4px 0 #000, -4px -4px 0 #000, 4px -4px 0 #000, -4px 4px 0 #000, 0 8px 25px rgba(0,0,0,0.9)";
+              transform = `scale(${0.85 + wordScale * 0.15})`;
+              extraGlow = "";
             }
           } else if (isPast) {
-            color      = "rgba(200,200,200,0.65)";
-            fontSize   = FONT_SIZES.subtitle - 4;
-            textShadow = "2px 2px 0 #000";
+            color = "rgba(200,200,200,0.55)";
+            fontSize = FONT_SIZES.subtitle - 4;
+            textShadow = "2px 2px 0 rgba(0,0,0,0.5)";
+            transform = "scale(1)";
           } else {
             // Future
-            color      = "rgba(130,130,130,0.5)";
-            fontSize   = FONT_SIZES.subtitle - 6;
+            color = "rgba(100,100,120,0.4)";
+            fontSize = FONT_SIZES.subtitle - 6;
             textShadow = "none";
+            transform = "scale(0.95)";
           }
 
           return (
@@ -157,15 +188,42 @@ export const KaraokeSubtitle: React.FC<Props> = ({ narration }) => {
                 color,
                 fontSize,
                 textShadow,
-                transition: "color 0.1s ease, font-size 0.1s ease",
+                transform,
+                filter: extraGlow || "none",
                 display: "inline-block",
                 letterSpacing: "-1px",
+                transition: "color 0.08s, transform 0.08s",
               }}
             >
               {word.text}
             </span>
           );
         })}
+      </div>
+
+      {/* Active word indicator bar */}
+      <div
+        style={{
+          position: "relative",
+          width: 200,
+          height: 3,
+          borderRadius: 2,
+          background: "rgba(255,255,255,0.08)",
+          marginTop: 20,
+          overflow: "hidden",
+          zIndex: 1,
+        }}
+      >
+        <div
+          style={{
+            height: "100%",
+            borderRadius: 2,
+            background: "linear-gradient(90deg, #6366f1, #818cf8)",
+            width: `${((activeWordIdx % WORDS_PER_GROUP) / Math.max(group.length - 1, 1)) * 100}%`,
+            transition: "width 0.15s ease-out",
+            boxShadow: "0 0 10px rgba(99,102,241,0.5)",
+          }}
+        />
       </div>
     </div>
   );

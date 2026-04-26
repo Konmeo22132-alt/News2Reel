@@ -125,15 +125,26 @@ export async function processVideoJob(
         const { execSync } = await import("child_process");
         const inputPath = path.join(process.cwd(), "public", videoPath.startsWith("/") ? videoPath.slice(1) : videoPath);
         const hfOutputPath = inputPath.replace(/\.mp4$/, "_hybrid.mp4");
-        // Apply HyperFrames color grade + vignette as post-process step
+        // Cinematic color grade post-process:
+        //   1. eq: higher contrast (1.12) + saturation (1.25) + slight darken
+        //   2. curves: teal-orange color grade (cool shadows, warm highlights)
+        //   3. unsharp: sharpness boost for crisp text/edges
+        //   4. vignette: cinematic darkened corners
         if (fs.existsSync(inputPath)) {
           const ffmpegBin = process.env.FFMPEG_PATH || "ffmpeg";
+          const filterChain = [
+            "eq=contrast=1.12:saturation=1.25:brightness=-0.01",
+            "curves=preset=cross_process",
+            "unsharp=5:5:0.7:5:5:0",
+            "vignette=PI/4",
+          ].join(",");
           execSync(
             `"${ffmpegBin}" -y -i "${inputPath}" ` +
-            `-vf "eq=contrast=1.08:saturation=1.15:brightness=0.02,vignette=PI/5" ` +
-            `-c:v libx264 -preset fast -crf 18 -c:a copy "${hfOutputPath}"`,
-            { timeout: 120_000 }
+            `-vf "${filterChain}" ` +
+            `-c:v libx264 -preset slow -crf 17 -c:a copy "${hfOutputPath}"`,
+            { timeout: 300_000 } // 5 min for slow preset
           );
+
           if (fs.existsSync(hfOutputPath)) {
             fs.unlinkSync(inputPath);
             fs.renameSync(hfOutputPath, inputPath);
