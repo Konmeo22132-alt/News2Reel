@@ -5,6 +5,7 @@ export interface IVideoJob {
   jobId: string;
   sourceUrl: string;
   status: string;
+  engine: string;
   resultUrl: string | null;
   logs: string[];
   currentStep: string;
@@ -21,6 +22,7 @@ const VideoJobSchema = new Schema(
     jobId: { type: String, required: true, unique: true, default: uuidv4 },
     sourceUrl: { type: String, required: true },
     status: { type: String, default: "pending" },
+    engine: { type: String, default: "remotion" },
     resultUrl: { type: String, default: null },
     logs: { type: [String], default: [] },
     currentStep: { type: String, default: "Đang khởi tạo" },

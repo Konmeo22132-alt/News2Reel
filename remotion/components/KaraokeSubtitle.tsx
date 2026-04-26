@@ -65,7 +65,7 @@ export const KaraokeSubtitle: React.FC<Props> = ({ narration }) => {
     { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
   );
   const slideY = interpolate(entranceProgress, [0, 1], [25, 0], {
-    easing: Easing.out(Easing.cubic),
+    easing: (t: number) => 1 - Math.pow(1 - t, 3), // cubic ease-out
   });
   const opacity = interpolate(
     frame,
