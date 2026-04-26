@@ -163,20 +163,26 @@ export async function renderRemotionVideo(
     }, MAX_RENDER_MS);
 
     child.stdout?.on("data", (data: string) => {
-      const match = data.toString().match(/\[(\d+)\/(\d+)\]/);
+      const str = data.toString();
+      // Match multiple Remotion output formats:
+      // v4: "ℹ (100/1696)"  or  "(100/1696)"
+      // v3: "[100/1696]"
+      // Also: "Rendering frame 100/1696"
+      const match = str.match(/(?:\((\d+)\/(\d+)\)|\[(\d+)\/(\d+)\]|frame\s+(\d+)\/(\d+))/i);
       if (match) {
-        const current = parseInt(match[1], 10);
-        const total = parseInt(match[2], 10);
+        const current = parseInt(match[1] ?? match[3] ?? match[5], 10);
+        const total = parseInt(match[2] ?? match[4] ?? match[6], 10);
         if (total > 0) {
           const pct = Math.floor((current / total) * 100);
           const totalBars = 20;
           const filledBars = Math.floor((pct / 100) * totalBars);
           const emptyBars = totalBars - filledBars;
-          const barStr = `[${"#".repeat(filledBars)}${"=".repeat(emptyBars)}] ${pct}%`;
-          onProgress(35 + pct * 0.60, `Đang render React: ${barStr}`);
+          const barStr = `[${"█".repeat(filledBars)}${"░".repeat(emptyBars)}] ${pct}%`;
+          onProgress(35 + pct * 0.60, `Render: ${current}/${total} frames ${barStr}`);
         }
       }
     });
+
 
     child.stderr?.on("data", (data: string) => {
       console.log(`[Remotion ${jobId}] ${data.toString()}`);

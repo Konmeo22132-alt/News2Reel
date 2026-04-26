@@ -355,8 +355,38 @@ export default function CreateVideoForm({ defaultSources = [] }: CreateVideoForm
                   </div>
                 </div>
               )}
+
+              {/* Cancel Button */}
+              {state.phase === "polling" && state.jobData?.status === "processing" && (
+                <div className="flex justify-end mt-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!confirm("Xác nhận hủy pipeline đang chạy?")) return;
+                      try {
+                        const jid = state.phase === "polling" ? state.jobId : "";
+                        const res = await fetch(`/api/jobs/${jid}/cancel`, { method: "POST" });
+                        const data = await res.json();
+                        if (data.success) {
+                          setState({ phase: "error", message: "Pipeline đã bị hủy bởi người dùng" });
+                        }
+                      } catch { /* ignore */ }
+                    }}
+                    className="flex items-center gap-1.5 text-xs py-1.5 px-3 rounded-md transition-all hover:scale-105"
+                    style={{
+                      background: "rgba(239,68,68,0.1)",
+                      border: "1px solid rgba(239,68,68,0.25)",
+                      color: "#ef4444",
+                    }}
+                  >
+                    <XCircle className="w-3 h-3" />
+                    Hủy Pipeline
+                  </button>
+                </div>
+              )}
             </div>
           )}
+
 
           {/* Form */}
           {(state.phase === "idle" || state.phase === "creating") && (
