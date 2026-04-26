@@ -130,12 +130,16 @@ export async function renderRemotionVideo(
     //   → This flag forces Chromium to use /tmp instead (unlimited)
     // --no-sandbox + --disable-setuid-sandbox: required for running as root on Linux VPS
     // --disable-gpu: no GPU on VPS, avoid GPU-related crashes
+    // CRITICAL: Do NOT use --single-process. It causes Chrome to hang/crash during
+    // Remotion render (renderer + GPU process collision). Use multi-process with limits.
     const chromiumArgs = [
       "--no-sandbox",
       "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",   // THE key fix for VPS /dev/shm OOM crash
-      "--disable-gpu",
-      "--single-process",
+      "--disable-dev-shm-usage",   // /dev/shm is only 64MB on many VPS — force /tmp
+      "--disable-gpu",              // No GPU on VPS
+      "--disable-software-rasterizer",
+      "--disable-extensions",
+      "--mute-audio",
     ].join(" ");
 
     const remotionCmd = [
