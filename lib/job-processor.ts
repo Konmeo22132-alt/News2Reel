@@ -12,6 +12,7 @@ import { renderVideo } from "./video-renderer";
 import type { HyperFramesRenderOptions } from "./video-renderer-hyperframes";
 import { generateSocialCards } from "./social-card-generator";
 import { publishToTikTok } from "./tiktok";
+import { assertNotCancelled, cleanupJob } from "./cancel-registry";
 import type { AppConfig } from "./types";
 
 async function setStatus(
@@ -68,11 +69,13 @@ export async function processVideoJob(
     };
 
     // ── STEP 1: Scrape ──────────────────────────────────────────
+    assertNotCancelled(jobId);
     await track(`Đang scrape: ${sourceUrl}`, "Scrape bài viết", 5);
     const article = await scrapeArticle(sourceUrl);
     await track(`Bài: "${article.title}"`, "Scrape bài viết", 10);
 
     // ── STEP 2: AI Script ────────────────────────────────────────
+    assertNotCancelled(jobId);
     const hasVisionAgent = !!(config.visionApiKey && config.visionModel);
     await track(
       `${hasVisionAgent ? "👁 Vision Agent + " : ""}${config.aiProvider === "groq" ? "Groq" : "Beeknoee"} AI tạo kịch bản...`,
@@ -98,6 +101,7 @@ export async function processVideoJob(
     await track("Generated social card HTML templates", "Render UI", 22);
 
     // ── STEP 3: Render ───────────────────────────────────────────
+    assertNotCancelled(jobId);
     let videoPath = "";
     if (engine === "remotion") {
       await track(`Remotion render (${config.videoQuality}) — High Quality Viral...`, "Render Video", 25);
@@ -203,9 +207,11 @@ export async function processVideoJob(
     }
 
     // ── DONE ─────────────────────────────────────────────────────
+    cleanupJob(jobId);
     await setStatus(jobId, "completed", { resultUrl: videoPath });
     await track(`✅ Hoàn thành`, "Hoàn thành", 100);
   } catch (err) {
+    cleanupJob(jobId);
     const msg = err instanceof Error ? err.message : String(err);
     log(`[${jobId.slice(0, 8)}] ❌ Lỗi: ${msg}`);
     

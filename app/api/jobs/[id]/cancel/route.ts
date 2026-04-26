@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { VideoJobModel } from "@/lib/models/VideoJob";
+import { cancelJob } from "@/lib/cancel-registry";
 
 /**
  * POST /api/jobs/[id]/cancel — Cancel a running job.
- * Sets status to "failed" with a cancellation message.
+ * 1. Marks job as cancelled in the in-memory registry → kills any active child process
+ * 2. Updates DB status to failed
  */
 export async function POST(
   _request: NextRequest,
@@ -30,6 +32,11 @@ export async function POST(
       );
     }
 
+    // ── REAL CANCELLATION ──
+    // 1. Signal the in-memory registry (kills child process if active)
+    cancelJob(id);
+
+    // 2. Update DB
     await VideoJobModel.updateOne(
       { jobId: id },
       {
@@ -42,6 +49,8 @@ export async function POST(
         $push: { logs: "⛔ Job đã bị hủy bởi người dùng" },
       }
     );
+
+    console.log(`[Cancel] Job ${id.slice(0, 8)} cancelled by user`);
 
     return NextResponse.json({
       success: true,

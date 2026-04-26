@@ -5,6 +5,7 @@ import path from "path";
 import util from "util";
 import { VideoScript } from "./types";
 import { textToSpeech, getAudioDuration, tempMp3Path } from "./tts";
+import { registerChildProcess, unregisterChildProcess, assertNotCancelled } from "./cancel-registry";
 
 const execAsync = util.promisify(exec);
 
@@ -76,6 +77,8 @@ export async function renderRemotionVideo(
     const totalSteps = allScenes.length;
     for (let i = 0; i < totalSteps; i++) {
         const scene = allScenes[i];
+        // Cancel check before each TTS call
+        assertNotCancelled(jobId);
         onProgress(10 + Math.round((i / totalSteps) * 20), `TTS cảnh ${i + 1}/${totalSteps}...`);
         
         const mp3FileName = `vox_${i}.mp3`;
@@ -160,9 +163,12 @@ export async function renderRemotionVideo(
       },
     });
 
-    // Hard timeout — kill Remotion if it hangs beyond 45 minutes
+    // Register child process so cancel API can kill it
+    registerChildProcess(jobId, child);
+
+    // Hard timeout — kill Remotion if it hangs beyond 60 minutes
     const killTimer = setTimeout(() => {
-      console.error(`[Remotion ${jobId}] ⏰ Hard timeout (45min) reached — killing render process`);
+      console.error(`[Remotion ${jobId}] ⏰ Hard timeout (60min) reached — killing render process`);
       child.kill("SIGKILL");
     }, MAX_RENDER_MS);
 
@@ -195,8 +201,9 @@ export async function renderRemotionVideo(
     await new Promise((resolve, reject) => {
       child.on("close", (code, signal) => {
         clearTimeout(killTimer);
+        unregisterChildProcess(jobId);
         if (signal === "SIGKILL") {
-          reject(new Error(`Remotion bị kill sau 45 phút (quá lâu). Thử dùng engine FFmpeg.`));
+          reject(new Error(`Remotion bị kill (user cancel hoặc timeout). Thử dùng engine FFmpeg.`));
         } else if (code === 0) {
           resolve(true);
         } else {
