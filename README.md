@@ -1,140 +1,68 @@
-# 🎬 News2Reel — Automated TikTok Video Generation Pipeline
+# 🎬 News2Reel
 
-> **Turn any news article into a viral TikTok video in under 2 minutes — fully automated.**
+**News2Reel** is a fully automated pipeline designed to transform a news article URL into a high-quality, cinematic short video (Shorts/TikTok/Reels). It is highly optimized to retain viewer attention with fast-paced storytelling and engaging visual designs.
 
-News2Reel là pipeline tự động hóa production-ready, self-hosted: scrape tin tức Việt Nam, rewrite bằng AI thành TikTok script, tổng hợp TTS giọng nói, và render video 1080×1920 qua **Triple-Engine Architecture**: FFmpeg, Remotion (React), và HyperFrames (HTML/GSAP).
+## ✨ Key Features
 
----
+- **100% Automated:** Simply input a news article URL, and the system handles scraping, scriptwriting, voiceover generation, and video rendering.
+- **Multi-Agent AI:**
+  - **Script Agent:** Generates sensational hooks, segments the script into scenes, and triggers visual effects automatically (supports Groq, OpenAI, and compatible APIs).
+  - **Vision Agent (Optional):** Analyzes actual images from the article to ensure the script context perfectly matches the visuals.
+- **Modern Render Engine:** Utilizes React/Web technologies (via Remotion) for complex, programmable video effects:
+  - **Cinematic Hook:** The first 3 seconds use a combination of white flashes, camera shakes, zoom bursts, and title slams to "stop the scroll."
+  - **Dynamic Subtitles:** Karaoke-style subtitles with dynamic scaling and glowing effects on important keywords.
+  - **Scene Transitions:** Cinematic transitions including zoom-through, glitch cuts, whip pans, and cross-fades.
+  - **Post-processing:** Built-in color grading, contrast enhancement, and vignette effects.
+- **Optimized for Headless VPS:** The rendering engine is specifically tuned to run smoothly on low-spec VPS environments (2GB - 4GB RAM) without physical GPUs. Features effective anti-hang and Out-Of-Memory (OOM) killer prevention.
+- **High-Quality Voiceovers:** Utilizes Microsoft Edge TTS for natural-sounding, dynamic AI voices.
 
-## ✨ Features
+## 🚀 Installation & Setup
 
-### Core Pipeline
-- [x] **Automated news scraping v2** — extracts article body + ALL images (lazy-load, OG meta, figure tags) with UTM param cleaning.
-- [x] **AI Script Generation + Vision** — LLM rewrites article into hook-driven TikTok script with `<keyword>` tagging; sends article images (up to 5) for AI to choose scene-appropriate photos. Auto-fallback to text-only if model doesn't support vision.
-- [x] **Multi-provider AI support** — Beeknoee (GPT-OSS-120B), Groq (LLaMA 3.3 70B), or any OpenAI-compatible endpoint.
-- [x] **Vietnamese TTS** — Microsoft Edge TTS (`vi-VN-NamMinhNeural`) at +20% speed; Google TTS fallback.
-- [x] **Triple Rendering Engines** — FFmpeg (fast), Remotion React (HQ viral), HyperFrames HTML/GSAP (cinematic).
-- [x] **Cron Auto-Generation** — `POST /api/cron/auto-generate` với Bearer auth + daily limit guard.
+### System Requirements
+- Node.js >= 18
+- PM2 (recommended for production)
+- FFmpeg (required for audio and video post-processing)
+- Recommended VPS: Ubuntu, >= 4GB RAM (or 2GB RAM + Swap).
 
-### 🌐 Option 3: HyperFrames Engine — HTML/GSAP (Cinematic)
-HyperFrames renders thông qua headless Chrome → FFmpeg MP4:
-- **Ken Burns**: GSAP `fromTo` scale 1.0→1.08 + pan suốt duration scene.
-- **4-word Karaoke**: GSAP className toggle — active=white/gold, past=gray, future=dark. Không bounce.
-- **Breaking News Banner**: GSAP slide-in từ `-60px` → `0` trong 0.5s (hook scenes).
-- **Animation Overlays**: `ImpactCallout` (big number), `DataChart` (bar chart animate), `SplitScreenVS`, `WarningAlert`.
-- Render: `npx hyperframes render --input scene.html --output scene.mp4 --fps 30`
-- Mux audio + concat: FFmpeg sau khi render từng scene.
+### Setup Instructions
 
-### ⚛️ Option 2: Remotion React Engine — Layout Zone Architecture
-Strict 3-zone layout system (1080×1920):
-- **Top Zone (0-280px)**: Breaking news banner + channel watermark.
-- **Content Zone (280-1440px)**: `NewsPhoto` Ken Burns image (hard-clipped), animation overlays.
-- **Subtitle Zone (1440-1920px)**: `KaraokeSubtitle` ONLY — sacred, nothing else.
+1. **Clone the repository and install dependencies:**
+   ```bash
+   git clone <repo-url>
+   cd autovideo-admin
+   npm install
+   ```
 
-### ⚡ Option 1: FFmpeg Engine v3
-- [x] **Breaking News lower-third** — `BREAKING` red box + animated title text, fade out sau 2.5s (hook scenes).
-- [x] **Article image with Ken Burns** — `zoompan` zoom 1.0→1.08, crop 9:16.
-- [x] **Seamless B-Roll Loop** — `setpts=PTS-STARTPTS` reset timestamps, `fps=30` để tránh giật khi loop.
-- [x] **BGM at -18dB** — `amix` weight 0.12.
-- [x] **Watermark** — `@News2Reel` top-left, 55% opacity.
-- [x] **4-word karaoke subtitles** — active word white/yellow, unspoken gray.
-- [x] **Cross-dissolve transitions** — `xfade=fade:0.25s` giữa scenes, fallback plain concat.
+2. **Environment Configuration:**
+   Create a `.env` file based on `.env.example` and fill in the required API keys (MongoDB, AI Provider, etc.).
 
-### 🏗️ Infrastructure
-- [x] **Admin UI** — Next.js 15 dashboard: manage jobs, config, trigger renders.
-- [x] **Inline video preview** — `<video>` player ngay trong form khi render xong (autoPlay, muted, loop).
-- [x] **Settings validation** — validate API key trước khi save, "Test kết nối" button verify live.
-- [x] **Multi-quality output** — 720p (fast) / 1080p (HQ).
-- [x] **Video streaming API** — `/api/stream/videos/[filename]` for in-browser preview.
-- [x] **Cron endpoint** — `/api/cron/auto-generate` với Bearer secret auth + daily limit check.
-- [ ] **TikTok auto-post** — direct upload via TikTok Content Posting API (wired, auth pending).
+3. **Configure Swap Space (Critical for low-RAM VPS):**
+   If running on a VPS with limited memory, execute the setup script to create swap space, preventing OOM crashes during rendering.
+   ```bash
+   chmod +x scripts/setup-swap.sh
+   sudo ./scripts/setup-swap.sh
+   ```
 
----
-
-## 🏗️ Architecture
-
-```
-Article URL
-    │
-    ▼
-lib/scraper.ts              ← Cheerio parsing: title + body + ALL images (OG/lazy/figure)
-    │
-    ▼
-lib/ai.ts                   ← Vision LLM: multimodal image+text, auto-fallback text-only
-    │
-    ▼
-lib/job-processor.ts        ← Routes to engine based on UI choice
-    │
-    ├── engine="ffmpeg"      → lib/video-renderer.ts
-    │       └── TTS → Ken Burns → Breaking News L3 → ASS Karaoke → Watermark → xfade concat
-    │
-    ├── engine="remotion"    → lib/video-renderer-remotion.ts
-    │       └── React zones: TopZone / ContentZone / SubtitleZone
-    │
-    └── engine="hyperframes" → lib/video-renderer-hyperframes.ts
-            └── HTML template → GSAP animate → HF render → FFmpeg mux → concat
-    │
-    ▼
-public/videos/video_<jobId>.mp4
-    │
-    ▼
-/api/cron/auto-generate     ← Cron trigger (Bearer auth, daily limit guard)
-```
-
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-- **Node.js 22+** (required by HyperFrames)
-- **Python 3** + `pip install edge-tts`
-- **FFmpeg 4.3+** on PATH (with `libass`, `libfreetype`, `xfade` support)
-- **Playwright Chromium** (cho HyperFrames headless render và social card screenshots)
-
-### Install & Run
-
+### Running in Development
 ```bash
-git clone https://github.com/Konmeo22132-alt/News2Reel.git
-cd News2Reel
-npm install
-npx playwright install chromium --with-deps
-cp .env.example .env   # fill in MONGODB_URI, ADMIN_PASSWORD, etc.
 npm run dev
 ```
 
-Open [http://localhost:3069](http://localhost:3069) to access the admin panel.
-
----
-
-## ⚙️ Environment Variables
-
-| Variable | Description | Default |
-|---|---|---|
-| `MONGODB_URI` | MongoDB connection string | `mongodb://localhost:27017/autovideo` |
-| `ADMIN_PASSWORD` | Admin panel password | `admin` |
-| `CRON_SECRET` | Bearer token cho `/api/cron/auto-generate` | disabled if not set |
-| `FFMPEG_PATH` | Override FFmpeg binary path | `ffmpeg` (from PATH) |
-
-API Keys và cấu hình AI được lưu trong MongoDB qua Settings UI — không cần biến môi trường riêng.
-
----
-
-## 🤖 Cron Auto-Generation
-
-Set up cron trên VPS Ubuntu:
-
+### Running in Production
+It is highly recommended to use PM2 to manage the application process and prevent system crashes during heavy rendering tasks.
 ```bash
-# Tạo video mỗi 4 giờ
-0 */4 * * * curl -s -X POST http://localhost:3069/api/cron/auto-generate \
-  -H "Authorization: Bearer YOUR_CRON_SECRET" \
-  -H "Content-Type: application/json" \
-  -d '{"engine": "ffmpeg"}' >> /var/log/news2reel-cron.log 2>&1
+npm run build
+pm2 startOrRestart ecosystem.config.js
+pm2 save
 ```
 
-Xem trạng thái: `GET /api/cron/auto-generate` (không cần auth).
+## 🏗 Project Structure
 
----
+- `/app`: Next.js App Router containing the Admin Dashboard UI and API endpoints.
+- `/lib`: Core logic including Scraper, AI Agents, Job Processor, and Database Models.
+- `/remotion`: React source code for video generation (Compositions, Components, Layout constants).
+- `/public`: Storage for static assets and successfully rendered videos.
+- `/scripts`: Utility scripts for system setup and maintenance.
 
-## 📄 License
-
-MIT — free to use, modify, and deploy.
+## 📝 License
+Proprietary / Internal.
