@@ -39,8 +39,9 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         PORT: "3069",
-        // Give Node.js 3GB heap — plenty for Next.js + Remotion orchestration
-        NODE_OPTIONS: "--max-old-space-size=3072",
+        // Next.js heap: 1.5GB — leaves room for Remotion (1GB) + Chromium (1GB) + OS
+        // Total: 1.5 + 1.0 + 1.0 + 0.5 (OS) = 4.0GB
+        NODE_OPTIONS: "--max-old-space-size=1536",
       },
     },
   ],

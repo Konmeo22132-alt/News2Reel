@@ -127,22 +127,36 @@ export async function renderRemotionVideo(
 
     const MAX_RENDER_MS = 60 * 60 * 1000; // 60 minute hard cap
 
-    // CRITICAL for VPS stability:
-    // --disable-dev-shm-usage: /dev/shm is only 64MB on many VPS setups
-    //   → Chromium crashes when it tries to use shared memory for rendering
-    //   → This flag forces Chromium to use /tmp instead (unlimited)
-    // --no-sandbox + --disable-setuid-sandbox: required for running as root on Linux VPS
-    // --disable-gpu: no GPU on VPS, avoid GPU-related crashes
-    // CRITICAL: Do NOT use --single-process. It causes Chrome to hang/crash during
-    // Remotion render (renderer + GPU process collision). Use multi-process with limits.
+    // ── Chromium flags — OPTIMIZED FOR 4GB VPS ──────────────────────────
+    //
+    // LESSON LEARNED (the hard way):
+    //   1. --disable-gpu + --disable-software-rasterizer = NO RENDERER → crash
+    //      Fix: remove --disable-software-rasterizer, let swiftshader work
+    //   2. Chromium spawns a separate GPU process even with --disable-gpu
+    //      Fix: --in-process-gpu → run GPU code in main process, OOM killer
+    //           can't target it separately
+    //   3. Each Chromium renderer tab uses 200-500MB
+    //      Fix: --renderer-process-limit=1, --js-flags limit heap
+    //
     const chromiumArgs = [
+      // Sandbox (must disable on Linux VPS running as root)
       "--no-sandbox",
       "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",   // /dev/shm is only 64MB on many VPS — force /tmp
-      "--disable-gpu",              // No GPU on VPS
-      "--disable-software-rasterizer",
+      // Memory: /dev/shm is tiny on VPS
+      "--disable-dev-shm-usage",
+      // GPU: disable hardware GPU but keep software renderer alive
+      "--disable-gpu",
+      "--disable-gpu-compositing",
+      "--disable-gpu-sandbox",
+      "--in-process-gpu",             // ← GPU code runs in main process, not separate
+      "--disable-accelerated-2d-canvas",
+      "--disable-accelerated-video-decode",
+      // Process limits
+      "--renderer-process-limit=1",   // Only 1 renderer
       "--disable-extensions",
       "--mute-audio",
+      // Memory limits for Chromium's V8
+      "--js-flags=--max-old-space-size=512",
     ].join(" ");
 
     const remotionCmd = [
@@ -153,15 +167,19 @@ export async function renderRemotionVideo(
       `--log=verbose`,
       `--timeout=120000`,
       `--concurrency=1`,
+      `--gl=swangle`,                // Software WebGL — no hardware GPU needed
       `--chromium-args="${chromiumArgs}"`,
     ].join(" ");
 
     const child = exec(remotionCmd, {
       env: {
         ...process.env,
-        NODE_OPTIONS: "--max-old-space-size=2048",
+        // Remotion CLI Node.js heap — 1GB is enough for orchestration
+        // (Chromium does the actual rendering, not Node.js)
+        NODE_OPTIONS: "--max-old-space-size=1024",
       },
     });
+
 
     // Register child process so cancel API can kill it
     registerChildProcess(jobId, child);
@@ -200,11 +218,19 @@ export async function renderRemotionVideo(
 
 
     await new Promise((resolve, reject) => {
+      // CRITICAL: handle 'error' event to prevent unhandled exception
+      // that would crash the parent Next.js process
+      child.on("error", (err) => {
+        clearTimeout(killTimer);
+        unregisterChildProcess(jobId);
+        reject(new Error(`Remotion process error: ${err.message}`));
+      });
+
       child.on("close", (code, signal) => {
         clearTimeout(killTimer);
         unregisterChildProcess(jobId);
-        if (signal === "SIGKILL") {
-          reject(new Error(`Remotion bị kill (user cancel hoặc timeout). Thử dùng engine FFmpeg.`));
+        if (signal === "SIGKILL" || code === 9) {
+          reject(new Error(`Remotion process bị kill (OOM/cancel/timeout). Hệ thống đang xử lý video quá nặng.`));
         } else if (code === 0) {
           resolve(true);
         } else {
