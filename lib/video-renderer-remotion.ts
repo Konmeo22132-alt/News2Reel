@@ -122,25 +122,37 @@ export async function renderRemotionVideo(
     // 4. Execute Remotion
     onProgress(35, `Đang khởi động Remotion Engine (${absoluteTotalFrames} frames)...`);
 
-    const MAX_RENDER_MS = 45 * 60 * 1000; // 45 minute hard cap
+    const MAX_RENDER_MS = 60 * 60 * 1000; // 60 minute hard cap
+
+    // CRITICAL for VPS stability:
+    // --disable-dev-shm-usage: /dev/shm is only 64MB on many VPS setups
+    //   → Chromium crashes when it tries to use shared memory for rendering
+    //   → This flag forces Chromium to use /tmp instead (unlimited)
+    // --no-sandbox + --disable-setuid-sandbox: required for running as root on Linux VPS
+    // --disable-gpu: no GPU on VPS, avoid GPU-related crashes
+    const chromiumArgs = [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",   // THE key fix for VPS /dev/shm OOM crash
+      "--disable-gpu",
+      "--single-process",
+    ].join(" ");
 
     const remotionCmd = [
-      `NODE_OPTIONS="--max-old-space-size=2048"`,
       `npx remotion render remotion/index.ts AutoVideoComposition`,
       `"${outFile}"`,
       `--props="${propsFile}"`,
       `--frames=0-${absoluteTotalFrames - 1}`,
-      `--log=info`,
+      `--log=verbose`,
       `--timeout=120000`,
       `--concurrency=1`,
+      `--chromium-args="${chromiumArgs}"`,
     ].join(" ");
 
     const child = exec(remotionCmd, {
       env: {
         ...process.env,
         NODE_OPTIONS: "--max-old-space-size=2048",
-        // Chromium stability flags for headless render on VPS
-        CHROMIUM_FLAGS: "--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage",
       },
     });
 
