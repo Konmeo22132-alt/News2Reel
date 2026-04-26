@@ -172,31 +172,32 @@ export async function renderRemotionVideo(
       child.kill("SIGKILL");
     }, MAX_RENDER_MS);
 
-    child.stdout?.on("data", (data: string) => {
-      const str = data.toString();
-      // Match multiple Remotion output formats:
-      // v4: "ℹ (100/1696)"  or  "(100/1696)"
-      // v3: "[100/1696]"
-      // Also: "Rendering frame 100/1696"
+
+    // ── Progress parser (shared for stdout + stderr) ──────────────────────────
+    // Remotion v4 writes frame progress to STDERR (not stdout).
+    // Format examples: "ℹ (100/1696)" | "(100/1696)" | "[100/1696]" | "frame 100/1696"
+    const parseProgress = (str: string) => {
       const match = str.match(/(?:\((\d+)\/(\d+)\)|\[(\d+)\/(\d+)\]|frame\s+(\d+)\/(\d+))/i);
       if (match) {
         const current = parseInt(match[1] ?? match[3] ?? match[5], 10);
-        const total = parseInt(match[2] ?? match[4] ?? match[6], 10);
-        if (total > 0) {
+        const total   = parseInt(match[2] ?? match[4] ?? match[6], 10);
+        if (total > 0 && current >= 0) {
           const pct = Math.floor((current / total) * 100);
-          const totalBars = 20;
-          const filledBars = Math.floor((pct / 100) * totalBars);
-          const emptyBars = totalBars - filledBars;
-          const barStr = `[${"█".repeat(filledBars)}${"░".repeat(emptyBars)}] ${pct}%`;
-          onProgress(35 + pct * 0.60, `Render: ${current}/${total} frames ${barStr}`);
+          const filledBars = Math.floor((pct / 100) * 20);
+          const barStr = `[${"█".repeat(filledBars)}${"░".repeat(20 - filledBars)}] ${pct}%`;
+          onProgress(35 + Math.floor(pct * 0.60), `Render: ${current}/${total} frames ${barStr}`);
         }
       }
-    });
+    };
 
+    child.stdout?.on("data", (data: string) => parseProgress(data.toString()));
 
     child.stderr?.on("data", (data: string) => {
-      console.log(`[Remotion ${jobId}] ${data.toString()}`);
+      const str = data.toString();
+      parseProgress(str); // ← Remotion v4 frame progress comes through stderr
+      console.log(`[Remotion ${jobId}] ${str}`);
     });
+
 
     await new Promise((resolve, reject) => {
       child.on("close", (code, signal) => {
