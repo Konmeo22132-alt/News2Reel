@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, Sequence, Audio, staticFile, useCurrentFrame, interpolate } from "remotion";
+import { AbsoluteFill, Sequence, Audio, staticFile, useCurrentFrame, interpolate, continueRender, delayRender } from "remotion";
 import { ScriptTemplate } from "../Root";
 import { ZONES, FRAME_WIDTH, FRAME_HEIGHT, FONT_SIZES, ANIM } from "../constants/layout";
 
@@ -20,6 +20,46 @@ import { PointToPoint } from "./PointToPoint";
 import { SplitScreenVS } from "./SplitScreenVS";
 import { DataChart } from "./DataChart";
 import { WarningAlert } from "./WarningAlert";
+
+// ─── Font Loading (Remotion-safe) ────────────────────────────────────────────
+// IMPORTANT: Do NOT use <link> tags for fonts in Remotion components.
+// Remotion cannot track external resource loading from <link> → delayRender hangs.
+// Use FontFace API with delayRender/continueRender instead.
+
+const FONT_FAMILY = "Outfit, 'Noto Sans', Arial, sans-serif";
+
+// Pre-load font once at module level (outside component to avoid re-loading)
+let fontHandle: ReturnType<typeof delayRender> | null = null;
+let fontLoaded = false;
+
+function loadOutfitFont(): ReturnType<typeof delayRender> | null {
+  if (typeof document === "undefined" || fontLoaded) return null;
+  const handle = delayRender("Loading Outfit font");
+  const font = new FontFace(
+    "Outfit",
+    "url(https://fonts.gstatic.com/s/outfit/v11/QGYyz_MVcBeNP4NjuGObqx1XmO1I4TC1C4G-EiAou6Y.woff2) format('woff2')",
+    { weight: "400 900", style: "normal", display: "swap" }
+  );
+  font.load()
+    .then((loaded) => {
+      document.fonts.add(loaded);
+      fontLoaded = true;
+      continueRender(handle);
+    })
+    .catch(() => {
+      // Font failed — continue render with fallback font, don't block
+      fontLoaded = true;
+      continueRender(handle);
+    });
+  fontHandle = handle;
+  return handle;
+}
+
+// Trigger font load
+if (typeof document !== "undefined" && !fontLoaded) {
+  loadOutfitFont();
+}
+
 
 // ─── Watermark ───────────────────────────────────────────────────────────────
 
@@ -61,11 +101,14 @@ const Watermark: React.FC<{ username: string }> = ({ username }) => (
 // ─── Film Grain Overlay ──────────────────────────────────────────────────────
 // Subtle animated noise that makes everything feel "cinematic"
 
+// ─── Film Grain Overlay ──────────────────────────────────────────────────────
+// Simple CSS-only grain — no SVG filters (SVG feTurbulence hangs headless Chromium)
+
 const FilmGrain: React.FC = () => {
   const frame = useCurrentFrame();
-  // Shift grain pattern every frame for animation
-  const offsetX = (frame * 37) % 200;
-  const offsetY = (frame * 53) % 200;
+  // Shift position every frame for animation
+  const offsetX = (frame * 37) % 100;
+  const offsetY = (frame * 53) % 100;
 
   return (
     <div
@@ -74,9 +117,12 @@ const FilmGrain: React.FC = () => {
         inset: 0,
         zIndex: 90,
         pointerEvents: "none",
-        opacity: 0.06,
-        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
-        backgroundPosition: `${offsetX}px ${offsetY}px`,
+        opacity: 0.035,
+        // Simple repeating gradient that simulates grain — no SVG, no filter
+        backgroundImage: [
+          `repeating-linear-gradient(${45 + offsetX * 0.5}deg, transparent 0px, transparent 2px, rgba(255,255,255,0.08) 2px, rgba(255,255,255,0.08) 3px)`,
+          `repeating-linear-gradient(${135 + offsetY * 0.5}deg, transparent 0px, transparent 2px, rgba(255,255,255,0.05) 2px, rgba(255,255,255,0.05) 3px)`,
+        ].join(", "),
         mixBlendMode: "overlay",
       }}
     />
@@ -129,15 +175,9 @@ export const MainComposition: React.FC<{ script: ScriptTemplate }> = ({ script }
       style={{
         background: "#050510",
         overflow: "hidden",
-        fontFamily: "'Outfit', sans-serif",
+        fontFamily: FONT_FAMILY,
       }}
     >
-      {/* Global Font */}
-      <link
-        href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&display=swap"
-        rel="stylesheet"
-      />
-
       {/* ── Persistent Layers (always visible) ── */}
       <Watermark username={script.fake_username || "TheInvestigator"} />
       <CinematicVignette />
